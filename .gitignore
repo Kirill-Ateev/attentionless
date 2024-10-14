@@ -1,3 +1,8 @@
+# Sources
+/images/*
+/output/images/*
+/output/metadata/*
+
 # Logs
 logs
 *.log
