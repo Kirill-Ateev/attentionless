@@ -4,7 +4,18 @@ const path = require('path');
 const crypto = require('crypto');
 
 // Configurable folders and categories
-const categories = ['food', 'clown'];
+const categories = [
+  'food',
+  'clown',
+  'childrendrawings',
+  'surgery',
+  'architecture',
+  'tools',
+  'graffiti',
+  'insect',
+  'painting',
+  'flowers',
+];
 const imageFolderPath = './images'; // Update this path as per your folder structure
 const outputImagesPath = './output/images';
 const outputMetadataPath = './output/metadata';
