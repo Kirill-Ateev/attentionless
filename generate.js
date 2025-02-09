@@ -14,7 +14,6 @@ const categories = [
   'drawings',
   'flowers',
   'food',
-  'graffiti',
   'insect',
   'other',
   'strange',
@@ -32,7 +31,7 @@ const finalSize = 1024;
 function seededRandom(seed) {
   const hash = crypto
     .createHash('sha256')
-    .update(seed.toString())
+    .update(`${seed}_RAW_ATTENTION`)
     .digest('hex');
   let rand = parseInt(hash.substring(0, 8), 16) / 0xffffffff;
   return () => {
@@ -72,15 +71,20 @@ function applyImageTransformations(ctx, image, seedRand, x, y) {
 
   console.log('width: ', x, image.width, ctx.width, x + size);
   console.log('height: ', y, image.height, ctx.height, y + size);
-  const width = x || image.width || ctx.width || x + size;
-  const height = y || image.height || ctx.height || y + size;
+
+  const originWidth = seedRand() > 0.5 ? image.width : x;
+  const originHeight = seedRand() > 0.5 ? image.height : y;
+
+  const expanded = seedRand() > 0.5;
+  const width = expanded ? x + size : Math.ceil(x);
+  const height = expanded ? y + size : Math.ceil(y);
 
   // Save the current state of the canvas
   ctx.save();
 
   // Move to the center of the picture to rotate and scale
   ctx.translate(x + size / 2, y + size / 2);
-  ctx.rotate((rotation * Math.PI) / 180);
+  ctx.rotate((rotation * Math.PI) / (seedRand() * 360));
   ctx.translate(-(x + size / 2), -(y + size / 2));
 
   // Optionally apply tone or grayscale effects
@@ -105,13 +109,77 @@ function applyImageTransformations(ctx, image, seedRand, x, y) {
   ctx.restore();
 }
 
+function addStrokeEffects(ctx, seedRand) {
+  const lineCount = 2 + Math.floor(seedRand() * 10); // Количество линий
+
+  const colors =
+    seedRand() > 0.3
+      ? [
+          `hsl(${Math.floor(seedRand() * 360)}, ${Math.floor(
+            seedRand() * 100
+          )}%, ${Math.floor(seedRand() * 90)}%)`, // Темные цвета
+          `hsl(${Math.floor(seedRand() * 360)}, ${Math.floor(
+            seedRand() * 100
+          )}%, ${Math.floor(seedRand() * 90)}%)`,
+          `hsl(${Math.floor(seedRand() * 360)}, ${Math.floor(
+            seedRand() * 100
+          )}%, ${Math.floor(seedRand() * 90)}%)`,
+        ]
+      : ['hsl(0, 0%, 0%)'];
+
+  ctx.save();
+  ctx.globalCompositeOperation = 'overlay'; // Режим наложения
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  for (let i = 0; i < lineCount; i++) {
+    const startX = seedRand() * ctx.canvas.width;
+    const startY = seedRand() * ctx.canvas.height;
+    const segments = 10 + Math.floor(seedRand() * 15); // Сегменты кривой Безье
+
+    ctx.beginPath();
+    ctx.moveTo(startX, startY);
+
+    let prevX = startX;
+    let prevY = startY;
+
+    for (let j = 0; j < segments; j++) {
+      const length = 50 + seedRand() * 300;
+      // Генерация контрольных точек для кривой Безье
+      const controlX1 = prevX + (seedRand() - seedRand()) * length; // Первая контрольная точка
+      const controlY1 = prevY + (seedRand() - seedRand()) * length;
+      const controlX2 = controlX1 + (seedRand() - seedRand()) * length; // Вторая контрольная точка
+      const controlY2 = controlY1 + (seedRand() - seedRand()) * length;
+      const endX = controlX2 + (seedRand() - seedRand()) * length; // Конечная точка
+      const endY = controlY2 + (seedRand() - seedRand()) * length;
+
+      // Рисуем кривую Безье
+      ctx.bezierCurveTo(controlX1, controlY1, controlX2, controlY2, endX, endY);
+
+      // Применяем динамическую толщину
+      ctx.lineWidth = 0.5 + seedRand() * 20;
+
+      // Обновляем предыдущие координаты
+      prevX = endX;
+      prevY = endY;
+    }
+
+    // Параметры линии
+    ctx.strokeStyle = colors[Math.floor(seedRand() * colors.length)];
+    ctx.globalAlpha = 0.2 + seedRand();
+
+    ctx.stroke();
+  }
+
+  ctx.restore();
+  return { lineCount };
+}
+
 // Create collage image
 async function createImage(seed, instanceNumber) {
   const seedRand = seededRandom(seed);
   const canvas = createCanvas(canvasSize, canvasSize);
   const ctx = canvas.getContext('2d');
-
-  // Fill canvas with white background
 
   // Генерация случайного основного цвета
   const hue = Math.floor(seedRand() * 360);
@@ -212,6 +280,10 @@ async function createImage(seed, instanceNumber) {
 
   // Draw the 1000x1000 image at the center of the 1024x1024 canvas
   finalCtx.drawImage(canvas, 12, 12);
+
+  // Добавляем эффект рукописных пометок
+  const { lineCount } = addStrokeEffects(finalCtx, seedRand); // Уникальный seed для эффекта
+
   // extract modified pixels from canvas
   let finalImgData = finalCtx.getImageData(0, 0, finalSize, finalSize);
 
@@ -233,16 +305,21 @@ async function createImage(seed, instanceNumber) {
   await fs.ensureDir(outputImagesPath);
   await fs.writeFile(outputImagePath, buffer);
 
-  return outputImagePath;
+  return { outputImagePath, lineCount };
 }
 
 // Create metadata for the image
-async function createMetadata(instanceNumber, seed, selectedImages) {
+async function createMetadata(instanceNumber, seed, selectedImages, lineCount) {
   const metadata = {
     name: `Raw Attention #${instanceNumber}`,
     description: 'Raw Attention collection',
     image: `${instanceNumber}.webp`,
-    attributes: [],
+    attributes: [
+      {
+        trait_type: 'stroke count',
+        value: lineCount,
+      },
+    ],
     seed,
   };
 
@@ -281,12 +358,12 @@ async function generateImagesAndMetadata(instanceCount = 1) {
     }
 
     // Create the image
-    const imagePath = await createImage(seed, i);
+    const { outputImagePath, lineCount } = await createImage(seed, i);
 
     // Create the metadata
-    const metadata = await createMetadata(i, seed, selectedImages);
+    const metadata = await createMetadata(i, seed, selectedImages, lineCount);
 
-    console.log(`Generated image: ${imagePath}`);
+    console.log(`Generated image: ${outputImagePath}`);
     // console.log(`Generated metadata: ${JSON.stringify(metadata, null, 2)}`);
   }
 }
