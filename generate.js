@@ -2,19 +2,24 @@ const { createCanvas, loadImage } = require('canvas');
 const fs = require('fs-extra');
 const path = require('path');
 const crypto = require('crypto');
+const { applyGrayscale, applyHueRotate, shuffle } = require('./utils');
+const webp = require('webp-wasm');
 
 // Configurable folders and categories
 const categories = [
-  'food',
-  'clown',
-  'childrendrawings',
-  'surgery',
+  'animals',
   'architecture',
-  'tools',
+  'art',
+  'clown',
+  'drawings',
+  'flowers',
+  'food',
   'graffiti',
   'insect',
-  'painting',
-  'flowers',
+  'other',
+  'strange',
+  'surgery',
+  'tools',
 ];
 const imageFolderPath = './images'; // Update this path as per your folder structure
 const outputImagesPath = './output/images';
@@ -65,6 +70,11 @@ function applyImageTransformations(ctx, image, seedRand, x, y) {
   const rotation = seedRand() * 360; // Rotation between 0 and 360 degrees
   const deformation = seedRand(); // Deformation factor (0 to 1)
 
+  console.log('width: ', x, image.width, ctx.width, x + size);
+  console.log('height: ', y, image.height, ctx.height, y + size);
+  const width = x || image.width || ctx.width || x + size;
+  const height = y || image.height || ctx.height || y + size;
+
   // Save the current state of the canvas
   ctx.save();
 
@@ -75,10 +85,17 @@ function applyImageTransformations(ctx, image, seedRand, x, y) {
 
   // Optionally apply tone or grayscale effects
   const effect = seedRand();
-  if (effect < 0.33) {
-    ctx.filter = 'grayscale(100%)';
-  } else if (effect < 0.66) {
-    ctx.filter = 'hue-rotate(90deg)';
+
+  console.log('effect: ', effect, seedRand());
+  if (effect < 0.1) {
+    applyGrayscale(ctx, width, height);
+  } else if (effect > 0.7) {
+    applyHueRotate(ctx, width, height, seedRand() * 360);
+  }
+
+  if (effect < (size - 200) / 600) {
+    // Устанавливаем прозрачность в диапазоне [0.25, 0.75]
+    ctx.globalAlpha = seedRand() * 0.5 + 0.25;
   }
 
   // Draw the image with the specified size and deformation
@@ -95,12 +112,75 @@ async function createImage(seed, instanceNumber) {
   const ctx = canvas.getContext('2d');
 
   // Fill canvas with white background
-  ctx.fillStyle = '#FFFFFF';
+
+  // Генерация случайного основного цвета
+  const hue = Math.floor(seedRand() * 360);
+  const saturation = Math.floor(seedRand() * 100);
+  const lightness = Math.floor(seedRand() * 90);
+  const baseColor = `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+
+  // Создание градиента с вариациями
+  const gradientType = seedRand() > 0.5 ? 'linear' : 'radial';
+  let gradient;
+
+  if (gradientType === 'linear') {
+    const x0 = seedRand() * canvasSize;
+    const y0 = seedRand() * canvasSize;
+    const x1 = seedRand() * canvasSize;
+    const y1 = seedRand() * canvasSize;
+    gradient = ctx.createLinearGradient(x0, y0, x1, y1);
+  } else {
+    const r = (canvasSize / 2) * (0.2 + seedRand() * 0.8);
+    gradient = ctx.createRadialGradient(
+      canvasSize / 2,
+      canvasSize / 2,
+      0,
+      canvasSize / 2,
+      canvasSize / 2,
+      r
+    );
+  }
+
+  // Добавляем цветовые остановки с вариациями
+  gradient.addColorStop(0, baseColor);
+  gradient.addColorStop(
+    1,
+    `hsl(${(hue + 50 + seedRand() * 40) % 360}, ${saturation}%, ${
+      lightness + 10
+    }%)`
+  );
+
+  // Заливаем фон градиентом
+  ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, canvasSize, canvasSize);
+
+  // Добавляем текстуру с разводами
+  ctx.globalAlpha = 0.15 + seedRand() * 0.1; // Полупрозрачность
+  for (let i = 0; i < 5 + seedRand() * 10; i++) {
+    ctx.beginPath();
+    ctx.arc(
+      seedRand() * canvasSize,
+      seedRand() * canvasSize,
+      50 + seedRand() * 100,
+      0,
+      Math.PI * 2
+    );
+
+    // Случайный цвет для развода
+    ctx.fillStyle = `hsl(${(hue + 50 + seedRand() * 100) % 360}, ${
+      saturation - 20
+    }%, ${lightness + 20}%)`;
+    ctx.fill();
+  }
+
+  // Восстанавливаем настройки
+  ctx.globalAlpha = 1.0;
+
+  const shuffledCategories = shuffle(categories, seedRand());
 
   // Load images from each category
   const imagesByCategory = {};
-  for (const category of categories) {
+  for (const category of shuffledCategories) {
     imagesByCategory[category] = await loadImagesFromCategory(category);
   }
 
@@ -132,9 +212,19 @@ async function createImage(seed, instanceNumber) {
 
   // Draw the 1000x1000 image at the center of the 1024x1024 canvas
   finalCtx.drawImage(canvas, 12, 12);
+  // extract modified pixels from canvas
+  let finalImgData = finalCtx.getImageData(0, 0, finalSize, finalSize);
+
+  // compress back to WebP
+  let buffer = await webp.encode(finalImgData, {
+    quality: 100, // Баланс между качеством и размером
+    // method: 6,   // Максимальная оптимизация
+    lossless: true, // С потерями дает лучшее сжатие для коллажей
+    alphaQuality: 100, // Качество альфа-канала
+  });
+
   // Save the image to the output folder
-  const outputImagePath = path.join(outputImagesPath, `${instanceNumber}.jpeg`);
-  const buffer = finalCanvas.toBuffer('image/jpeg');
+  const outputImagePath = path.join(outputImagesPath, `${instanceNumber}.webp`);
 
   if (!buffer) {
     throw new Error('Failed to generate image buffer');
@@ -153,6 +243,7 @@ async function createMetadata(instanceNumber, seed, selectedImages) {
     description: 'Raw Attention collection',
     image: `${instanceNumber}.webp`,
     attributes: [],
+    seed,
   };
 
   // Add image attributes based on selected images
