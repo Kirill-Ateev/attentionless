@@ -5,20 +5,24 @@ const crypto = require('crypto');
 const { applyGrayscale, applyHueRotate, shuffle } = require('./utils');
 const webp = require('webp-wasm');
 
+const ANIMALS = 'animals';
+const ARCHITECTURE = 'architecture';
+const ART = 'art';
+const FOOD = 'food';
+const INSECT = 'insect';
+const OTHER = 'other';
+const STRANGE = 'strange';
+const SURGERY = 'surgery';
 // Configurable folders and categories
 const categories = [
-  'animals',
-  'architecture',
-  'art',
-  'clown',
-  'drawings',
-  'flowers',
-  'food',
-  'insect',
-  'other',
-  'strange',
-  'surgery',
-  'tools',
+  ANIMALS,
+  ARCHITECTURE,
+  ART,
+  FOOD,
+  INSECT,
+  OTHER,
+  STRANGE,
+  SURGERY,
 ];
 const imageFolderPath = './images'; // Update this path as per your folder structure
 const outputImagesPath = './output/images';
@@ -68,6 +72,7 @@ function applyImageTransformations(ctx, image, seedRand, x, y) {
   const size = 200 + seedRand() * 600; // Size between 200px and 800px
   const rotation = seedRand() * 360; // Rotation between 0 and 360 degrees
   const deformation = seedRand(); // Deformation factor (0 to 1)
+  const computedArea = size * size * (1 + deformation);
 
   console.log('width: ', x, image.width, ctx.width, x + size);
   console.log('height: ', y, image.height, ctx.height, y + size);
@@ -189,6 +194,7 @@ async function createImage(seed, instanceNumber) {
   const seedRand = seededRandom(seed);
   const canvas = createCanvas(canvasSize, canvasSize);
   const ctx = canvas.getContext('2d');
+  const drawQueue = [];
 
   // Генерация случайного основного цвета
   const hue = Math.floor(seedRand() * 360);
@@ -264,9 +270,30 @@ async function createImage(seed, instanceNumber) {
   const selectedImages = {};
 
   // Place each category's image on the canvas
-  for (const category of categories) {
+  for (const category of shuffledCategories) {
     const images = imagesByCategory[category];
-    const selectedImagesCount = 1 + Math.floor(seedRand() * 5); // От 1 до 5 изображений
+    const min = {
+      [ANIMALS]: 1,
+      [ARCHITECTURE]: 1,
+      [ART]: 3,
+      [FOOD]: 4,
+      [INSECT]: 2,
+      [OTHER]: 3,
+      [STRANGE]: 2,
+      [SURGERY]: 2,
+    };
+    const factor = {
+      [ANIMALS]: 5,
+      [ARCHITECTURE]: 5,
+      [ART]: 8,
+      [FOOD]: 20,
+      [INSECT]: 6,
+      [OTHER]: 10,
+      [STRANGE]: 8,
+      [SURGERY]: 5,
+    };
+    const selectedImagesCount =
+      min[category] + Math.floor(seedRand() * factor[category]); // От 1 до 5 изображений
 
     for (let k = 0; k < selectedImagesCount; k++) {
       const randomImage = images[Math.floor(seedRand() * images.length)];
