@@ -34,7 +34,7 @@ const imageFolderPath = './images'; // Update this path as per your folder struc
 const outputImagesPath = './output/images';
 const outputMetadataPath = './output/metadata';
 
-const resolutionCoefficient = 2;
+const resolutionCoefficient = 4;
 const canvasSize = 1000 * resolutionCoefficient;
 const finalSize = 1024 * resolutionCoefficient;
 const signSize = finalSize - canvasSize;
@@ -308,7 +308,7 @@ async function createImage(seed, instanceNumber) {
       [ANIMALS]: 5,
       [ARCHITECTURE]: 5,
       [ART]: 8,
-      [FOOD]: 20,
+      [FOOD]: 15,
       [INSECT]: 6,
       [OTHER]: 20,
       [STRANGE]: 8,
