@@ -72,29 +72,38 @@ function applyImageTransformations(ctx, image, seedRand, x, y) {
   console.log('width: ', x, image.width, ctx.width, x + size);
   console.log('height: ', y, image.height, ctx.height, y + size);
 
-  const originWidth = seedRand() > 0.5 ? image.width : x;
-  const originHeight = seedRand() > 0.5 ? image.height : y;
+  const originWidth = seedRand() > 0.5 ? image.width : ctx.canvas.width;
+  const originHeight = seedRand() > 0.5 ? image.height : ctx.canvas.height;
 
   const expanded = seedRand() > 0.5;
-  const width = expanded ? x + size : Math.ceil(x);
-  const height = expanded ? y + size : Math.ceil(y);
+  const width = expanded
+    ? originWidth + size
+    : Math.max(Math.ceil(originWidth), 1);
+  const height = expanded
+    ? originHeight + size
+    : Math.max(Math.ceil(originHeight), 1);
 
   // Save the current state of the canvas
   ctx.save();
 
   // Move to the center of the picture to rotate and scale
-  ctx.translate(x + size / 2, y + size / 2);
+  ctx.translate(x + size / 4, y + size / 4);
   ctx.rotate((rotation * Math.PI) / (seedRand() * 360));
-  ctx.translate(-(x + size / 2), -(y + size / 2));
+  ctx.translate(-(x + size / 4), -(y + size / 4));
 
   // Optionally apply tone or grayscale effects
   const effect = seedRand();
 
   console.log('effect: ', effect, seedRand());
   if (effect < 0.1) {
-    applyGrayscale(ctx, width, height);
-  } else if (effect > 0.7) {
-    applyHueRotate(ctx, width, height, seedRand() * 360);
+    applyGrayscale(ctx, seedRand() * width, seedRand() * height);
+  } else if (effect > 0.65) {
+    applyHueRotate(
+      ctx,
+      seedRand() * width,
+      seedRand() * height,
+      seedRand() * 360
+    );
   }
 
   if (effect < (size - 200) / 600) {
@@ -110,7 +119,7 @@ function applyImageTransformations(ctx, image, seedRand, x, y) {
 }
 
 function addStrokeEffects(ctx, seedRand) {
-  const lineCount = 2 + Math.floor(seedRand() * 10); // Количество линий
+  const lineCount = seedRand() > 0.3 ? 0 : Math.floor(seedRand() * 10); // Количество линий
 
   const colors =
     seedRand() > 0.3
@@ -252,24 +261,38 @@ async function createImage(seed, instanceNumber) {
     imagesByCategory[category] = await loadImagesFromCategory(category);
   }
 
+  const selectedImages = {};
+
   // Place each category's image on the canvas
   for (const category of categories) {
     const images = imagesByCategory[category];
-    const randomImage = images[Math.floor(seedRand() * images.length)];
+    const selectedImagesCount = 1 + Math.floor(seedRand() * 5); // От 1 до 5 изображений
 
-    console.log(`[createImage]: Loading image: ${randomImage.path}`);
-    const image = await loadImage(randomImage.path).catch((err) => {
-      console.error(`Failed to load image: ${randomImage.path}`, err);
-      throw err;
-    });
-    const x = seedRand() * (canvasSize - 200);
-    const y = seedRand() * (canvasSize - 200);
+    for (let k = 0; k < selectedImagesCount; k++) {
+      const randomImage = images[Math.floor(seedRand() * images.length)];
+      console.log(`[createImage]: Loading image: ${randomImage.path}`);
+      const image = await loadImage(randomImage.path).catch((err) => {
+        console.error(`Failed to load image: ${randomImage.path}`, err);
+        throw err;
+      });
 
-    // Log the position and size for debugging
-    console.log(`[createImage]: Drawing image at x: ${x}, y: ${y}`);
+      // Генерация случайных координат для изображения
+      const x = seedRand() * (canvasSize - 200);
+      const y = seedRand() * (canvasSize - 200);
 
-    applyImageTransformations(ctx, image, seedRand, x, y);
-    console.log(`[createImage]: Transform applied`);
+      // Log the position and size for debugging
+      console.log(`[createImage]: Drawing image at x: ${x}, y: ${y}`);
+
+      // Применение трансформаций к изображению
+      applyImageTransformations(ctx, image, seedRand, x, y);
+      console.log(`[createImage]: Transform applied`);
+
+      // Сохранение информации о выбранном изображении для метаданных
+      if (!selectedImages[category]) {
+        selectedImages[category] = new Set();
+      }
+      selectedImages[category].add(randomImage.fileName);
+    }
   }
 
   // Create a larger canvas with 1024x1024 for white frame
@@ -305,7 +328,7 @@ async function createImage(seed, instanceNumber) {
   await fs.ensureDir(outputImagesPath);
   await fs.writeFile(outputImagePath, buffer);
 
-  return { outputImagePath, lineCount };
+  return { outputImagePath, lineCount, selectedImages };
 }
 
 // Create metadata for the image
@@ -325,10 +348,12 @@ async function createMetadata(instanceNumber, seed, selectedImages, lineCount) {
 
   // Add image attributes based on selected images
   for (const [category, imageData] of Object.entries(selectedImages)) {
-    const imageNumber = path.basename(imageData.fileName, '.webp'); // Extract number from file name
+    // const imageNumber = path.basename(imageData.fileName, '.webp'); // Extract number from file name
     metadata.attributes.push({
       trait_type: category,
-      value: imageNumber,
+      value: Array.from(imageData)
+        .sort((a, b) => a - b)
+        .join(', '),
     });
   }
 
@@ -350,15 +375,18 @@ async function generateImagesAndMetadata(instanceCount = 1) {
     console.log(`Generating instance #${i} with seed: ${seed}`);
 
     // Load images from each category and prepare metadata
-    const selectedImages = {};
-    for (const category of categories) {
-      const images = await loadImagesFromCategory(category);
-      const seedRand = seededRandom(seed);
-      selectedImages[category] = images[Math.floor(seedRand() * images.length)];
-    }
+    // const selectedImages = {};
+    // for (const category of categories) {
+    //   const images = await loadImagesFromCategory(category);
+    //   const seedRand = seededRandom(seed);
+    //   selectedImages[category] = images[Math.floor(seedRand() * images.length)];
+    // }
 
     // Create the image
-    const { outputImagePath, lineCount } = await createImage(seed, i);
+    const { outputImagePath, lineCount, selectedImages } = await createImage(
+      seed,
+      i
+    );
 
     // Create the metadata
     const metadata = await createMetadata(i, seed, selectedImages, lineCount);
