@@ -149,10 +149,15 @@ function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 
+function capitalizeFirstLetter(string) {
+  return string[0].toUpperCase() + string.slice(1);
+}
+
 module.exports = {
   applyGrayscale,
   applyHueRotate,
   shuffle,
   cubicBezier,
   clamp,
+  capitalizeFirstLetter,
 };

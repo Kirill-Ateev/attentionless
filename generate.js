@@ -2,7 +2,12 @@ const { createCanvas, loadImage } = require('canvas');
 const fs = require('fs-extra');
 const path = require('path');
 const crypto = require('crypto');
-const { applyGrayscale, applyHueRotate, shuffle } = require('./utils');
+const {
+  applyGrayscale,
+  applyHueRotate,
+  shuffle,
+  capitalizeFirstLetter,
+} = require('./utils');
 const webp = require('webp-wasm');
 
 const ANIMALS = 'animals';
@@ -13,6 +18,7 @@ const INSECT = 'insect';
 const OTHER = 'other';
 const STRANGE = 'strange';
 const SURGERY = 'surgery';
+
 // Configurable folders and categories
 const categories = [
   ANIMALS,
@@ -28,14 +34,21 @@ const imageFolderPath = './images'; // Update this path as per your folder struc
 const outputImagesPath = './output/images';
 const outputMetadataPath = './output/metadata';
 
-const canvasSize = 1000;
-const finalSize = 1024;
+const resolutionCoefficient = 2;
+const canvasSize = 1000 * resolutionCoefficient;
+const finalSize = 1024 * resolutionCoefficient;
+const signSize = finalSize - canvasSize;
+
+const imageMinSize = (finalSize * 200 * resolutionCoefficient) / finalSize;
+const imageMaxSize = (finalSize * 600 * resolutionCoefficient) / finalSize;
+
+const centerOffset = (canvasSize * ((finalSize - canvasSize) / 2)) / canvasSize;
 
 // Helper function to generate deterministic random values based on a seed
 function seededRandom(seed) {
   const hash = crypto
     .createHash('sha256')
-    .update(`${seed}_RAW_ATTENTION`)
+    .update(`${seed}_ATTENTIONLESS`)
     .digest('hex');
   let rand = parseInt(hash.substring(0, 8), 16) / 0xffffffff;
   return () => {
@@ -65,62 +78,6 @@ async function loadImagesFromCategory(category) {
   }
 
   return images;
-}
-
-// Apply transformations like rotation, scaling, and effects
-function applyImageTransformations(ctx, image, seedRand, x, y) {
-  const size = 200 + seedRand() * 600; // Size between 200px and 800px
-  const rotation = seedRand() * 360; // Rotation between 0 and 360 degrees
-  const deformation = seedRand(); // Deformation factor (0 to 1)
-  const computedArea = size * size * (1 + deformation);
-
-  console.log('width: ', x, image.width, ctx.width, x + size);
-  console.log('height: ', y, image.height, ctx.height, y + size);
-
-  const originWidth = seedRand() > 0.5 ? image.width : ctx.canvas.width;
-  const originHeight = seedRand() > 0.5 ? image.height : ctx.canvas.height;
-
-  const expanded = seedRand() > 0.5;
-  const width = expanded
-    ? originWidth + size
-    : Math.max(Math.ceil(originWidth), 1);
-  const height = expanded
-    ? originHeight + size
-    : Math.max(Math.ceil(originHeight), 1);
-
-  // Save the current state of the canvas
-  ctx.save();
-
-  // Move to the center of the picture to rotate and scale
-  ctx.translate(x + size / 4, y + size / 4);
-  ctx.rotate((rotation * Math.PI) / (seedRand() * 360));
-  ctx.translate(-(x + size / 4), -(y + size / 4));
-
-  // Optionally apply tone or grayscale effects
-  const effect = seedRand();
-
-  console.log('effect: ', effect, seedRand());
-  if (effect < 0.1) {
-    applyGrayscale(ctx, seedRand() * width, seedRand() * height);
-  } else if (effect > 0.65) {
-    applyHueRotate(
-      ctx,
-      seedRand() * width,
-      seedRand() * height,
-      seedRand() * 360
-    );
-  }
-
-  if (effect < (size - 200) / 600) {
-    // Устанавливаем прозрачность в диапазоне [0.25, 0.75]
-    ctx.globalAlpha = seedRand() * 0.5 + 0.25;
-  }
-
-  // Draw the image with the specified size and deformation
-  ctx.drawImage(image, x, y, size * (1 + deformation), size);
-
-  // Restore the previous state of the canvas
-  ctx.restore();
 }
 
 function addStrokeEffects(ctx, seedRand) {
@@ -187,6 +144,71 @@ function addStrokeEffects(ctx, seedRand) {
 
   ctx.restore();
   return { lineCount };
+}
+
+function prepareImageTransformation(ctx, image, seedRand, x, y) {
+  // Вычисляем основные параметры
+  const size = imageMinSize + seedRand() * imageMaxSize; // Размер от 200 до 800
+  const rotation = seedRand() * 360; // Поворот от 0 до 360 градусов
+  const deformation = seedRand(); // Коэффициент деформации (0...1)
+
+  // Приблизительная площадь (можно настроить по желанию)
+  const computedArea = size * size * (1 + deformation);
+
+  // Сохраним остальные случайные значения, чтобы не вызывать seedRand() повторно при отрисовке
+  const rotationDivisor = seedRand() * 360;
+  const effect = seedRand();
+  const originWidth = seedRand() > 0.5 ? image.width : ctx.canvas.width;
+  const originHeight = seedRand() > 0.5 ? image.height : ctx.canvas.height;
+
+  const expanded = seedRand() > 0.5;
+  const width = expanded
+    ? originWidth + size
+    : Math.max(Math.ceil(originWidth), 1);
+  const height = expanded
+    ? originHeight + size
+    : Math.max(Math.ceil(originHeight), 1);
+
+  const alpha = seedRand() * 0.5 + 0.25;
+
+  const effectParams = {
+    val1: seedRand(),
+    val2: seedRand(),
+  };
+
+  // Возвращаем объект с вычисленной площадью и функцией отрисовки
+  return {
+    area: computedArea,
+    draw: () => {
+      ctx.save();
+
+      // Перенос для поворота
+      ctx.translate(x + size / 4, y + size / 4);
+      ctx.rotate((rotation * Math.PI) / (rotationDivisor || 1));
+      ctx.translate(-(x + size / 4), -(y + size / 4));
+
+      // Применяем эффекты
+      if (seedRand() < 0.05) {
+        applyGrayscale(
+          ctx,
+          effectParams.val1 * image.width,
+          effectParams.val2 * image.height
+        );
+      }
+
+      if (effect > 0.65) {
+        applyHueRotate(ctx, width, height, seedRand() * 360);
+      }
+
+      if (effect < (size - imageMinSize) / imageMaxSize) {
+        ctx.globalAlpha = alpha;
+      }
+
+      // Отрисовка изображения с учётом деформации
+      ctx.drawImage(image, x, y, size * (1 + deformation), size);
+      ctx.restore();
+    },
+  };
 }
 
 // Create collage image
@@ -278,7 +300,7 @@ async function createImage(seed, instanceNumber) {
       [ART]: 3,
       [FOOD]: 4,
       [INSECT]: 2,
-      [OTHER]: 3,
+      [OTHER]: 4,
       [STRANGE]: 2,
       [SURGERY]: 2,
     };
@@ -288,12 +310,12 @@ async function createImage(seed, instanceNumber) {
       [ART]: 8,
       [FOOD]: 20,
       [INSECT]: 6,
-      [OTHER]: 10,
+      [OTHER]: 20,
       [STRANGE]: 8,
       [SURGERY]: 5,
     };
     const selectedImagesCount =
-      min[category] + Math.floor(seedRand() * factor[category]); // От 1 до 5 изображений
+      min[category] + Math.floor(seedRand() * factor[category]);
 
     for (let k = 0; k < selectedImagesCount; k++) {
       const randomImage = images[Math.floor(seedRand() * images.length)];
@@ -304,23 +326,26 @@ async function createImage(seed, instanceNumber) {
       });
 
       // Генерация случайных координат для изображения
-      const x = seedRand() * (canvasSize - 200);
-      const y = seedRand() * (canvasSize - 200);
+      const x = seedRand() * (canvasSize - imageMinSize);
+      const y = seedRand() * (canvasSize - imageMinSize);
 
-      // Log the position and size for debugging
-      console.log(`[createImage]: Drawing image at x: ${x}, y: ${y}`);
+      // Вместо немедленной отрисовки – подготовим инструкцию отрисовки:
+      const element = prepareImageTransformation(ctx, image, seedRand, x, y);
+      drawQueue.push(element);
 
-      // Применение трансформаций к изображению
-      applyImageTransformations(ctx, image, seedRand, x, y);
-      console.log(`[createImage]: Transform applied`);
-
-      // Сохранение информации о выбранном изображении для метаданных
-      if (!selectedImages[category]) {
-        selectedImages[category] = new Set();
-      }
-      selectedImages[category].add(randomImage.fileName);
+      // Сохранение информации для метаданных
+      selectedImages[
+        `${capitalizeFirstLetter(category)} ${randomImage.fileName.slice(
+          0,
+          -4
+        )}`
+      ] = true;
     }
   }
+
+  // После подготовки всех элементов сортируем их по убыванию площади и отрисовываем:
+  drawQueue.sort((a, b) => b.area - a.area);
+  drawQueue.forEach((item) => item.draw());
 
   // Create a larger canvas with 1024x1024 for white frame
   const finalCanvas = createCanvas(finalSize, finalSize);
@@ -329,10 +354,35 @@ async function createImage(seed, instanceNumber) {
   finalCtx.fillRect(0, 0, finalSize, finalSize);
 
   // Draw the 1000x1000 image at the center of the 1024x1024 canvas
-  finalCtx.drawImage(canvas, 12, 12);
+  finalCtx.drawImage(canvas, centerOffset, centerOffset);
 
   // Добавляем эффект рукописных пометок
   const { lineCount } = addStrokeEffects(finalCtx, seedRand); // Уникальный seed для эффекта
+
+  // Читаем .webp как буфер
+  const initialsBuffer = fs.readFileSync(path.join(__dirname, 'initials.webp'));
+
+  // Декодируем в RGBA-массив
+  const { data, width, height } = await webp.decode(initialsBuffer);
+
+  // Создаём временное изображение из данных RGBA
+  const initialsCanvas = createCanvas(width, height);
+  const initialsCtx = initialsCanvas.getContext('2d');
+  const imageData = initialsCtx.createImageData(width, height);
+  imageData.data.set(data);
+  initialsCtx.putImageData(imageData, 0, 0);
+
+  // Рисуем на финальном холсте
+  finalCtx.save();
+  finalCtx.globalAlpha = 0.7;
+  finalCtx.drawImage(
+    initialsCanvas,
+    finalSize - signSize - signSize,
+    finalSize - signSize - signSize,
+    signSize,
+    signSize
+  );
+  finalCtx.restore();
 
   // extract modified pixels from canvas
   let finalImgData = finalCtx.getImageData(0, 0, finalSize, finalSize);
@@ -361,12 +411,12 @@ async function createImage(seed, instanceNumber) {
 // Create metadata for the image
 async function createMetadata(instanceNumber, seed, selectedImages, lineCount) {
   const metadata = {
-    name: `Raw Attention #${instanceNumber}`,
-    description: 'Raw Attention collection',
+    name: `Attentionless #${instanceNumber}`,
+    description: 'Attentionless collection by Kirill Ateev',
     image: `${instanceNumber}.webp`,
     attributes: [
       {
-        trait_type: 'stroke count',
+        trait_type: 'Stroke count',
         value: lineCount,
       },
     ],
@@ -378,9 +428,7 @@ async function createMetadata(instanceNumber, seed, selectedImages, lineCount) {
     // const imageNumber = path.basename(imageData.fileName, '.webp'); // Extract number from file name
     metadata.attributes.push({
       trait_type: category,
-      value: Array.from(imageData)
-        .sort((a, b) => a - b)
-        .join(', '),
+      value: imageData,
     });
   }
 
@@ -400,14 +448,6 @@ async function generateImagesAndMetadata(instanceCount = 1) {
   for (let i = 1; i <= instanceCount; i++) {
     const seed = generateSeed();
     console.log(`Generating instance #${i} with seed: ${seed}`);
-
-    // Load images from each category and prepare metadata
-    // const selectedImages = {};
-    // for (const category of categories) {
-    //   const images = await loadImagesFromCategory(category);
-    //   const seedRand = seededRandom(seed);
-    //   selectedImages[category] = images[Math.floor(seedRand() * images.length)];
-    // }
 
     // Create the image
     const { outputImagePath, lineCount, selectedImages } = await createImage(
