@@ -30,17 +30,20 @@ const categories = [
   STRANGE,
   SURGERY,
 ];
-const imageFolderPath = './images'; // Update this path as per your folder structure
+const imageFolderPath = './images';
 const outputImagesPath = './output/images';
 const outputMetadataPath = './output/metadata';
 
-const resolutionCoefficient = 4;
+const resolutionCoefficient = 1;
 const canvasSize = 1000 * resolutionCoefficient;
 const finalSize = 1024 * resolutionCoefficient;
 const signSize = finalSize - canvasSize;
 
 const imageMinSize = (finalSize * 200 * resolutionCoefficient) / finalSize;
 const imageMaxSize = (finalSize * 600 * resolutionCoefficient) / finalSize;
+
+const arcMinSize = (finalSize * 50 * resolutionCoefficient) / finalSize;
+const arcMaxSize = (finalSize * 100 * resolutionCoefficient) / finalSize;
 
 const lineMinWidth = (finalSize * 0.5 * resolutionCoefficient) / finalSize;
 const lineMaxWidth = (finalSize * 20 * resolutionCoefficient) / finalSize;
@@ -271,7 +274,7 @@ async function createImage(seed, instanceNumber) {
     ctx.arc(
       seedRand() * canvasSize,
       seedRand() * canvasSize,
-      50 + seedRand() * 100,
+      arcMinSize + seedRand() * arcMaxSize,
       0,
       Math.PI * 2
     );
@@ -396,7 +399,7 @@ async function createImage(seed, instanceNumber) {
   let buffer = await webp.encode(finalImgData, {
     quality: 100, // Баланс между качеством и размером
     // method: 6,   // Максимальная оптимизация
-    lossless: true, // С потерями дает лучшее сжатие для коллажей
+    lossless: false, // С потерями дает лучшее сжатие для коллажей
     alphaQuality: 100, // Качество альфа-канала
   });
 
