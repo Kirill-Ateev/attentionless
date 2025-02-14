@@ -42,6 +42,11 @@ const signSize = finalSize - canvasSize;
 const imageMinSize = (finalSize * 200 * resolutionCoefficient) / finalSize;
 const imageMaxSize = (finalSize * 600 * resolutionCoefficient) / finalSize;
 
+const lineMinWidth = (finalSize * 0.5 * resolutionCoefficient) / finalSize;
+const lineMaxWidth = (finalSize * 20 * resolutionCoefficient) / finalSize;
+const lineMinLength = (finalSize * 50 * resolutionCoefficient) / finalSize;
+const lineMaxLength = (finalSize * 300 * resolutionCoefficient) / finalSize;
+
 const centerOffset = (canvasSize * ((finalSize - canvasSize) / 2)) / canvasSize;
 
 // Helper function to generate deterministic random values based on a seed
@@ -115,7 +120,7 @@ function addStrokeEffects(ctx, seedRand) {
     let prevY = startY;
 
     for (let j = 0; j < segments; j++) {
-      const length = 50 + seedRand() * 300;
+      const length = lineMinLength + seedRand() * lineMaxLength;
       // Генерация контрольных точек для кривой Безье
       const controlX1 = prevX + (seedRand() - seedRand()) * length; // Первая контрольная точка
       const controlY1 = prevY + (seedRand() - seedRand()) * length;
@@ -128,7 +133,7 @@ function addStrokeEffects(ctx, seedRand) {
       ctx.bezierCurveTo(controlX1, controlY1, controlX2, controlY2, endX, endY);
 
       // Применяем динамическую толщину
-      ctx.lineWidth = 0.5 + seedRand() * 20;
+      ctx.lineWidth = lineMinWidth + seedRand() * lineMaxWidth;
 
       // Обновляем предыдущие координаты
       prevX = endX;
