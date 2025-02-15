@@ -42,7 +42,7 @@ const signSize = finalSize - canvasSize;
 const withDeformation = false;
 
 const imageMinSize = (finalSize * 200 * resolutionCoefficient) / finalSize;
-const imageMaxSize = (finalSize * 600 * resolutionCoefficient) / finalSize;
+const imageMaxSize = (finalSize * 700 * resolutionCoefficient) / finalSize;
 
 const arcMinSize = (finalSize * 50 * resolutionCoefficient) / finalSize;
 const arcMaxSize = (finalSize * 100 * resolutionCoefficient) / finalSize;
@@ -226,8 +226,8 @@ function prepareImageTransformation(ctx, image, seedRand, x, y) {
       if (seedRand() < 0.05) {
         applyGrayscale(
           ctx,
-          effectParams.val1 * image.width,
-          effectParams.val2 * image.height
+          Math.max(effectParams.val1 * image.width, 1),
+          Math.max(effectParams.val2 * image.height, 1)
         );
       }
 
@@ -334,10 +334,10 @@ async function createImage(seed, instanceNumber) {
     const images = imagesByCategory[category];
     const min = {
       [ANIMALS]: 1,
-      [ARCHITECTURE]: 1,
+      [ARCHITECTURE]: 2,
       [ART]: 3,
       [FOOD]: 4,
-      [INSECT]: 3,
+      [INSECT]: 2,
       [OTHER]: 6,
       [STRANGE]: 2,
       [SURGERY]: 2,
