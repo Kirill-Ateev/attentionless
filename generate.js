@@ -385,7 +385,7 @@ async function createImage(seed, instanceNumber) {
     loadedImages.forEach(({ element, category, fileName }) => {
       drawQueue.push(element);
       selectedImages[
-        `${capitalizeFirstLetter(category)} ${fileName.slice(0, -4)}`
+        `${capitalizeFirstLetter(category)} image №${fileName.slice(0, -4)}`
       ] = 'Present';
     });
   }
@@ -453,7 +453,7 @@ async function createImage(seed, instanceNumber) {
 // Create metadata for the image
 async function createMetadata(instanceNumber, seed, selectedImages, lineCount) {
   const metadata = {
-    name: `Attentionless #${instanceNumber}`,
+    name: `Attentionless №${instanceNumber}`,
     description: 'Attentionless collection by Kirill Ateev',
     image: `${instanceNumber}.webp`,
     attributes: [
@@ -462,6 +462,7 @@ async function createMetadata(instanceNumber, seed, selectedImages, lineCount) {
         value: lineCount,
       },
     ],
+    external_url: 'ateev.art',
     seed,
   };
 
