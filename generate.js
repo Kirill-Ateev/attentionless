@@ -337,8 +337,8 @@ async function createImage(seed, instanceNumber) {
       [ARCHITECTURE]: 1,
       [ART]: 3,
       [FOOD]: 4,
-      [INSECT]: 2,
-      [OTHER]: 4,
+      [INSECT]: 3,
+      [OTHER]: 6,
       [STRANGE]: 2,
       [SURGERY]: 2,
     };
@@ -347,10 +347,10 @@ async function createImage(seed, instanceNumber) {
       [ARCHITECTURE]: 5,
       [ART]: 8,
       [FOOD]: 15,
-      [INSECT]: 6,
+      [INSECT]: 8,
       [OTHER]: 20,
       [STRANGE]: 8,
-      [SURGERY]: 5,
+      [SURGERY]: 6,
     };
     const selectedImagesCount =
       min[category] + Math.floor(seedRand() * factor[category]);
