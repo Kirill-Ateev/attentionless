@@ -38,8 +38,18 @@ function renameImages() {
       for (const file of files) {
         const oldPath = path.join(folderPath, file);
         const extension = path.extname(file);
-        const newName = `${counter}${extension}`;
-        const newPath = path.join(folderPath, newName);
+
+        // Определяем новое имя, проверяя на существование файла с таким именем
+        let candidate = counter;
+        let newName = `${candidate}${extension}`;
+        let newPath = path.join(folderPath, newName);
+
+        // Пока файл с таким именем существует, ищем следующее доступное имя
+        while (fs.existsSync(newPath)) {
+          candidate++;
+          newName = `${candidate}${extension}`;
+          newPath = path.join(folderPath, newName);
+        }
 
         try {
           fs.renameSync(oldPath, newPath);
@@ -51,7 +61,8 @@ function renameImages() {
           );
         }
 
-        counter++;
+        // Обновляем счётчик для следующей итерации
+        counter = candidate + 1;
       }
     }
 

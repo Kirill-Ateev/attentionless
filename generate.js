@@ -52,12 +52,6 @@ const lineMaxLength = (finalSize * 300 * resolutionCoefficient) / finalSize;
 
 const centerOffset = (canvasSize * ((finalSize - canvasSize) / 2)) / canvasSize;
 
-// const webpConfigOld = {
-//   quality: 100, // Баланс между качеством и размером
-//   // method: 6,   // Максимальная оптимизация
-//   lossless: 1, // С потерями дает лучшее сжатие для коллажей
-//   alphaQuality: 100, // Качество альфа-канала
-// };
 const webpConfig = {
   quality: 85,
   method: 6,
@@ -71,6 +65,17 @@ const webpConfig = {
   use_sharp_yuv: 1, // если требуется максимально точная цветопередача
   // Остальные параметры оставляем по умолчанию
 };
+
+const imageCache = new Map();
+
+async function cachedLoadImage(imagePath) {
+  if (imageCache.has(imagePath)) {
+    return imageCache.get(imagePath);
+  }
+  const image = await loadImage(imagePath);
+  imageCache.set(imagePath, image);
+  return image;
+}
 
 // Helper function to generate deterministic random values based on a seed
 function seededRandom(seed) {
@@ -311,15 +316,18 @@ async function createImage(seed, instanceNumber) {
 
   const shuffledCategories = shuffle(categories, seedRand());
 
-  // Load images from each category
-  const imagesByCategory = {};
-  for (const category of shuffledCategories) {
-    imagesByCategory[category] = await loadImagesFromCategory(category);
-  }
+  // Load images from each category in parallel
+  const imagesByCategoryEntries = await Promise.all(
+    shuffledCategories.map(async (category) => {
+      const images = await loadImagesFromCategory(category);
+      return [category, images];
+    })
+  );
+  const imagesByCategory = Object.fromEntries(imagesByCategoryEntries);
 
   const selectedImages = {};
 
-  // Place each category's image on the canvas
+  // Place each category's image on the canvas with parallel image loading
   for (const category of shuffledCategories) {
     const images = imagesByCategory[category];
     const min = {
@@ -345,30 +353,39 @@ async function createImage(seed, instanceNumber) {
     const selectedImagesCount =
       min[category] + Math.floor(seedRand() * factor[category]);
 
+    // Собираем массив промисов для загрузки изображений параллельно
+    const promises = [];
     for (let k = 0; k < selectedImagesCount; k++) {
       const randomImage = images[Math.floor(seedRand() * images.length)];
       console.log(`[createImage]: Loading image: ${randomImage.path}`);
-      const image = await loadImage(randomImage.path).catch((err) => {
-        console.error(`Failed to load image: ${randomImage.path}`, err);
-        throw err;
-      });
-
-      // Генерация случайных координат для изображения
-      const x = seedRand() * (canvasSize - imageMinSize);
-      const y = seedRand() * (canvasSize - imageMinSize);
-
-      // Вместо немедленной отрисовки – подготовим инструкцию отрисовки:
-      const element = prepareImageTransformation(ctx, image, seedRand, x, y);
-      drawQueue.push(element);
-
-      // Сохранение информации для метаданных
-      selectedImages[
-        `${capitalizeFirstLetter(category)} ${randomImage.fileName.slice(
-          0,
-          -4
-        )}`
-      ] = 'Present';
+      const promise = cachedLoadImage(randomImage.path)
+        .then((image) => {
+          // Генерация случайных координат для изображения после загрузки
+          const x = seedRand() * (canvasSize - imageMinSize);
+          const y = seedRand() * (canvasSize - imageMinSize);
+          const element = prepareImageTransformation(
+            ctx,
+            image,
+            seedRand,
+            x,
+            y
+          );
+          return { element, category, fileName: randomImage.fileName };
+        })
+        .catch((err) => {
+          console.error(`Failed to load image: ${randomImage.path}`, err);
+          throw err;
+        });
+      promises.push(promise);
     }
+    // Ожидаем, пока загрузятся все изображения для данной категории
+    const loadedImages = await Promise.all(promises);
+    loadedImages.forEach(({ element, category, fileName }) => {
+      drawQueue.push(element);
+      selectedImages[
+        `${capitalizeFirstLetter(category)} ${fileName.slice(0, -4)}`
+      ] = 'Present';
+    });
   }
 
   // После подготовки всех элементов сортируем их по убыванию площади и отрисовываем:
