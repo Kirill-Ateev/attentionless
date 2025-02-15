@@ -34,7 +34,7 @@ const imageFolderPath = './images';
 const outputImagesPath = './output/images';
 const outputMetadataPath = './output/metadata';
 
-const resolutionCoefficient = 1;
+const resolutionCoefficient = 4;
 const canvasSize = 1000 * resolutionCoefficient;
 const finalSize = 1024 * resolutionCoefficient;
 const signSize = finalSize - canvasSize;
@@ -51,6 +51,26 @@ const lineMinLength = (finalSize * 50 * resolutionCoefficient) / finalSize;
 const lineMaxLength = (finalSize * 300 * resolutionCoefficient) / finalSize;
 
 const centerOffset = (canvasSize * ((finalSize - canvasSize) / 2)) / canvasSize;
+
+// const webpConfigOld = {
+//   quality: 100, // Баланс между качеством и размером
+//   // method: 6,   // Максимальная оптимизация
+//   lossless: 1, // С потерями дает лучшее сжатие для коллажей
+//   alphaQuality: 100, // Качество альфа-канала
+// };
+const webpConfig = {
+  quality: 85,
+  method: 6,
+  pass: 10,
+  exact: 1,
+  alpha_compression: 1,
+  alpha_filtering: 2,
+  alpha_quality: 100,
+  partitions: 3,
+  autofilter: 1,
+  use_sharp_yuv: 1, // если требуется максимально точная цветопередача
+  // Остальные параметры оставляем по умолчанию
+};
 
 // Helper function to generate deterministic random values based on a seed
 function seededRandom(seed) {
@@ -347,7 +367,7 @@ async function createImage(seed, instanceNumber) {
           0,
           -4
         )}`
-      ] = true;
+      ] = 'Present';
     }
   }
 
@@ -396,12 +416,7 @@ async function createImage(seed, instanceNumber) {
   let finalImgData = finalCtx.getImageData(0, 0, finalSize, finalSize);
 
   // compress back to WebP
-  let buffer = await webp.encode(finalImgData, {
-    quality: 100, // Баланс между качеством и размером
-    // method: 6,   // Максимальная оптимизация
-    lossless: false, // С потерями дает лучшее сжатие для коллажей
-    alphaQuality: 100, // Качество альфа-канала
-  });
+  let buffer = await webp.encode(finalImgData, webpConfig);
 
   // Save the image to the output folder
   const outputImagePath = path.join(outputImagesPath, `${instanceNumber}.webp`);
