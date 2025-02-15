@@ -39,6 +39,8 @@ const canvasSize = 1000 * resolutionCoefficient;
 const finalSize = 1024 * resolutionCoefficient;
 const signSize = finalSize - canvasSize;
 
+const withDeformation = false;
+
 const imageMinSize = (finalSize * 200 * resolutionCoefficient) / finalSize;
 const imageMaxSize = (finalSize * 600 * resolutionCoefficient) / finalSize;
 
@@ -183,10 +185,10 @@ function prepareImageTransformation(ctx, image, seedRand, x, y) {
   // Вычисляем основные параметры
   const size = imageMinSize + seedRand() * imageMaxSize; // Размер от 200 до 800
   const rotation = seedRand() * 360; // Поворот от 0 до 360 градусов
-  const deformation = seedRand(); // Коэффициент деформации (0...1)
+  const deformation = withDeformation ? 1 + seedRand() : 1; // Коэффициент деформации (0...1)
 
   // Приблизительная площадь (можно настроить по желанию)
-  const computedArea = size * size * (1 + deformation);
+  const computedArea = size * size * deformation;
 
   // Сохраним остальные случайные значения, чтобы не вызывать seedRand() повторно при отрисовке
   const rotationDivisor = seedRand() * 360;
@@ -238,7 +240,7 @@ function prepareImageTransformation(ctx, image, seedRand, x, y) {
       }
 
       // Отрисовка изображения с учётом деформации
-      ctx.drawImage(image, x, y, size * (1 + deformation), size);
+      ctx.drawImage(image, x, y, size * deformation, size);
       ctx.restore();
     },
   };
