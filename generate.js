@@ -346,12 +346,12 @@ async function createImage(seed, instanceNumber) {
       [SURGERY]: 2,
     };
     const factor = {
-      [ANIMALS]: 5,
+      [ANIMALS]: 3,
       [ARCHITECTURE]: 5,
       [ART]: 8,
       [FOOD]: 15,
       [INSECT]: 8,
-      [OTHER]: 20,
+      [OTHER]: 22,
       [STRANGE]: 8,
       [SURGERY]: 6,
     };
