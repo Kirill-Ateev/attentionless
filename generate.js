@@ -121,7 +121,7 @@ function addStrokeEffects(ctx, seedRand) {
       ? [
           `hsl(${Math.floor(seedRand() * 360)}, ${Math.floor(
             seedRand() * 100
-          )}%, ${Math.floor(seedRand() * 90)}%)`, // Темные цвета
+          )}%, ${Math.floor(seedRand() * 90)}%)`,
           `hsl(${Math.floor(seedRand() * 360)}, ${Math.floor(
             seedRand() * 100
           )}%, ${Math.floor(seedRand() * 90)}%)`,
@@ -179,17 +179,13 @@ function addStrokeEffects(ctx, seedRand) {
   return { lineCount };
 }
 
-function prepareImageTransformation(ctx, image, seedRand, x, y) {
+function prepareImageTransformation(ctx, image, seedRand, centerX, centerY) {
   // Вычисляем основные параметры
-  const size = imageMinSize + seedRand() * imageMaxSize; // Размер от 200 до 800
+  const size = imageMinSize + seedRand() * imageMaxSize;
   const rotation = seedRand() * 360; // Поворот от 0 до 360 градусов
   const deformation = seedRand(); // Коэффициент деформации (0...1)
 
-  // Приблизительная площадь (можно настроить по желанию)
-  const computedArea = size * size;
-
   // Сохраним остальные случайные значения, чтобы не вызывать seedRand() повторно при отрисовке
-  const rotationDivisor = seedRand() * 360;
   const effect = seedRand();
   const originWidth = seedRand() > 0.5 ? image.width : ctx.canvas.width;
   const originHeight = seedRand() > 0.5 ? image.height : ctx.canvas.height;
@@ -215,17 +211,19 @@ function prepareImageTransformation(ctx, image, seedRand, x, y) {
     val1: seedRand(),
     val2: seedRand(),
   };
+  const finalX = centerX - newWidth / 2;
+  const finalY = centerY - newHeight / 2;
 
   // Возвращаем объект с вычисленной площадью и функцией отрисовки
   return {
-    area: computedArea,
+    area: newWidth * newHeight,
     draw: () => {
       ctx.save();
 
       // Перенос для поворота
-      ctx.translate(x + newWidth / 4, y + newHeight / 4);
-      ctx.rotate((rotation * Math.PI) / (rotationDivisor || 1));
-      ctx.translate(-(x + newWidth / 4), -(y + newHeight / 4));
+      ctx.translate(finalX + newWidth / 2, finalY + newHeight / 2);
+      ctx.rotate((rotation * Math.PI) / 360);
+      ctx.translate(-(finalX + newWidth / 2), -(finalY + newHeight / 2));
 
       // Применяем эффекты
       if (seedRand() < 0.05) {
@@ -245,7 +243,7 @@ function prepareImageTransformation(ctx, image, seedRand, x, y) {
       }
 
       // Отрисовка изображения с учётом деформации
-      ctx.drawImage(image, x, y, newWidth, newHeight);
+      ctx.drawImage(image, finalX, finalY, newWidth, newHeight);
       ctx.restore();
     },
   };
@@ -343,7 +341,7 @@ async function createImage(seed, instanceNumber) {
       [ART]: 3,
       [FOOD]: 4,
       [INSECT]: 2,
-      [OTHER]: 6,
+      [OTHER]: 7,
       [STRANGE]: 2,
       [SURGERY]: 2,
     };
@@ -367,15 +365,14 @@ async function createImage(seed, instanceNumber) {
       console.log(`[createImage]: Loading image: ${randomImage.path}`);
       const promise = cachedLoadImage(randomImage.path)
         .then((image) => {
-          // Генерация случайных координат для изображения после загрузки
-          const x = seedRand() * (canvasSize - imageMinSize);
-          const y = seedRand() * (canvasSize - imageMinSize);
+          const centerX = seedRand() * canvasSize;
+          const centerY = seedRand() * canvasSize;
           const element = prepareImageTransformation(
             ctx,
             image,
             seedRand,
-            x,
-            y
+            centerX,
+            centerY
           );
           return { element, category, fileName: randomImage.fileName };
         })
