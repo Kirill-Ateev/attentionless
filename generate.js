@@ -39,8 +39,6 @@ const canvasSize = 1000 * resolutionCoefficient;
 const finalSize = 1024 * resolutionCoefficient;
 const signSize = finalSize - canvasSize;
 
-const withDeformation = false;
-
 const imageMinSize = (finalSize * 200 * resolutionCoefficient) / finalSize;
 const imageMaxSize = (finalSize * 700 * resolutionCoefficient) / finalSize;
 
@@ -172,7 +170,7 @@ function addStrokeEffects(ctx, seedRand) {
 
     // Параметры линии
     ctx.strokeStyle = colors[Math.floor(seedRand() * colors.length)];
-    ctx.globalAlpha = 0.2 + seedRand();
+    ctx.globalAlpha = 0.3 + seedRand();
 
     ctx.stroke();
   }
@@ -185,16 +183,23 @@ function prepareImageTransformation(ctx, image, seedRand, x, y) {
   // Вычисляем основные параметры
   const size = imageMinSize + seedRand() * imageMaxSize; // Размер от 200 до 800
   const rotation = seedRand() * 360; // Поворот от 0 до 360 градусов
-  const deformation = withDeformation ? 1 + seedRand() : 1; // Коэффициент деформации (0...1)
+  const deformation = seedRand(); // Коэффициент деформации (0...1)
 
   // Приблизительная площадь (можно настроить по желанию)
-  const computedArea = size * size * deformation;
+  const computedArea = size * size;
 
   // Сохраним остальные случайные значения, чтобы не вызывать seedRand() повторно при отрисовке
   const rotationDivisor = seedRand() * 360;
   const effect = seedRand();
   const originWidth = seedRand() > 0.5 ? image.width : ctx.canvas.width;
   const originHeight = seedRand() > 0.5 ? image.height : ctx.canvas.height;
+
+  // Cкейл картинки для 95% вариантов
+  const scale = size / Math.max(image.width, image.height);
+  const newWidth =
+    deformation > 0.95 ? size * seedRand() : Math.max(image.width, 1) * scale;
+  const newHeight =
+    deformation > 0.95 ? size : Math.max(image.height, 1) * scale;
 
   const expanded = seedRand() > 0.5;
   const width = expanded
@@ -218,9 +223,9 @@ function prepareImageTransformation(ctx, image, seedRand, x, y) {
       ctx.save();
 
       // Перенос для поворота
-      ctx.translate(x + size / 4, y + size / 4);
+      ctx.translate(x + newWidth / 4, y + newHeight / 4);
       ctx.rotate((rotation * Math.PI) / (rotationDivisor || 1));
-      ctx.translate(-(x + size / 4), -(y + size / 4));
+      ctx.translate(-(x + newWidth / 4), -(y + newHeight / 4));
 
       // Применяем эффекты
       if (seedRand() < 0.05) {
@@ -240,7 +245,7 @@ function prepareImageTransformation(ctx, image, seedRand, x, y) {
       }
 
       // Отрисовка изображения с учётом деформации
-      ctx.drawImage(image, x, y, size * deformation, size);
+      ctx.drawImage(image, x, y, newWidth, newHeight);
       ctx.restore();
     },
   };
@@ -384,9 +389,13 @@ async function createImage(seed, instanceNumber) {
     const loadedImages = await Promise.all(promises);
     loadedImages.forEach(({ element, category, fileName }) => {
       drawQueue.push(element);
-      selectedImages[
-        `${capitalizeFirstLetter(category)} image №${fileName.slice(0, -4)}`
-      ] = 'Present';
+      // Формируем ключ для выбранного изображения
+      const key = `${capitalizeFirstLetter(category)} image №${fileName.slice(
+        0,
+        -4
+      )}`;
+      // Увеличиваем счетчик для каждого вхождения (если изображение выбрано более одного раза, оно учитывается столько раз)
+      selectedImages[key] = (selectedImages[key] || 0) + 1;
     });
   }
 
@@ -452,26 +461,34 @@ async function createImage(seed, instanceNumber) {
 
 // Create metadata for the image
 async function createMetadata(instanceNumber, seed, selectedImages, lineCount) {
+  const imageEntries = Object.entries(selectedImages);
+  const totalImageCount = imageEntries.reduce(
+    (sum, [, count]) => sum + count,
+    0
+  );
   const metadata = {
     name: `Attentionless №${instanceNumber}`,
     description: 'Attentionless collection by Kirill Ateev',
     image: `${instanceNumber}.webp`,
+    external_url: 'ateev.art',
+    seed,
     attributes: [
       {
-        trait_type: 'Stroke count',
+        trait_type: 'Number of images',
+        value: totalImageCount,
+      },
+      {
+        trait_type: 'Number of strokes',
         value: lineCount,
       },
     ],
-    external_url: 'ateev.art',
-    seed,
   };
 
   // Add image attributes based on selected images
-  for (const [category, imageData] of Object.entries(selectedImages)) {
-    // const imageNumber = path.basename(imageData.fileName, '.webp'); // Extract number from file name
+  for (const [category, count] of imageEntries) {
     metadata.attributes.push({
       trait_type: category,
-      value: imageData,
+      value: count,
     });
   }
 
