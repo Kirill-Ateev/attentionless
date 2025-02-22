@@ -3,6 +3,7 @@
 /images2/*
 /output/images/*
 /output/metadata/*
+/V1
 
 # Logs
 logs

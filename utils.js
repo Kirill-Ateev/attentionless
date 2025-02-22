@@ -1,3 +1,5 @@
+const { createCanvas } = require('canvas');
+
 function applyGrayscale(ctx, width, height) {
   const imageData = ctx.getImageData(0, 0, width, height);
   const data = imageData.data;
@@ -81,33 +83,76 @@ function hslToRgb(h, s, l) {
 }
 
 // Функция для применения эффекта hue-rotate
-// degrees — величина сдвига в градусах (например, 90)
-function applyHueRotate(ctx, width, height, degrees) {
+function applyHueRotate(ctx, width, height, degrees, satDelta = 0) {
+  // Убираем lightDelta
   const imageData = ctx.getImageData(0, 0, width, height);
   const data = imageData.data;
 
-  // Преобразуем градусы в доли круга (от 0 до 1)
   const hueShift = degrees / 360;
+  const satMod = 1 + satDelta / 100;
 
   for (let i = 0; i < data.length; i += 4) {
-    const r = data[i];
-    const g = data[i + 1];
-    const b = data[i + 2];
+    let [h, s, l] = rgbToHsl(data[i], data[i + 1], data[i + 2]);
 
-    // Переводим из RGB в HSL
-    let [h, s, l] = rgbToHsl(r, g, b);
-
-    // Смещаем оттенок и корректируем, если значение вышло за предел
+    // Применяем ТОЛЬКО hue и saturation
     h = (h + hueShift) % 1;
+    s = clamp(s * satMod, 0, 1);
 
-    // Преобразуем обратно в RGB
-    const [nr, ng, nb] = hslToRgb(h, s, l);
+    // Lightness остаётся оригинальной
+    const [nr, ng, nb] = hslToRgb(h, s, l); // l не меняется
     data[i] = nr;
     data[i + 1] = ng;
     data[i + 2] = nb;
   }
 
   ctx.putImageData(imageData, 0, 0);
+}
+
+function applyBackgroundNoise(ctx, width, height, seedRand) {
+  const intensity = 0.3 + seedRand() * 0.7; // Увеличили интенсивность
+  const alpha = 0.15 + seedRand() * 0.25; // Увеличили прозрачность
+  const grainSize = 1 + Math.floor(seedRand() * 3); // Добавили вариативность размера зерен
+
+  const noiseCanvas = createCanvas(width * grainSize, height * grainSize);
+  const noiseCtx = noiseCanvas.getContext('2d');
+  const imageData = noiseCtx.createImageData(
+    noiseCanvas.width,
+    noiseCanvas.height
+  );
+
+  // Генерация высококонтрастного шума
+  for (let i = 0; i < imageData.data.length; i += 4) {
+    const rand = seedRand();
+    const value = rand > 0.5 ? 255 : 0; // Бинарный шум для контраста
+    const pixelAlpha = rand < intensity ? alpha * 255 : 0;
+
+    imageData.data[i] = value;
+    imageData.data[i + 1] = value;
+    imageData.data[i + 2] = value;
+    imageData.data[i + 3] = pixelAlpha;
+  }
+
+  noiseCtx.putImageData(imageData, 0, 0);
+
+  // Масштабирование и смешивание
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, 0, width, height); // Ограничиваем область рисования
+  ctx.clip(); // Обрезаем по границам
+
+  ctx.globalCompositeOperation = 'soft-light'; // Более мягкое смешивание
+  ctx.drawImage(
+    noiseCanvas,
+    0,
+    0,
+    noiseCanvas.width,
+    noiseCanvas.height,
+    0,
+    0,
+    width,
+    height // Точное соответствие размерам
+  );
+  ctx.restore();
 }
 
 function shuffle(array, randomNumber) {
@@ -156,6 +201,7 @@ function capitalizeFirstLetter(string) {
 module.exports = {
   applyGrayscale,
   applyHueRotate,
+  applyBackgroundNoise,
   shuffle,
   cubicBezier,
   clamp,

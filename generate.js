@@ -7,6 +7,8 @@ const {
   applyHueRotate,
   shuffle,
   capitalizeFirstLetter,
+  clamp,
+  applyBackgroundNoise,
 } = require('./utils');
 const webp = require('webp-wasm');
 
@@ -34,7 +36,7 @@ const imageFolderPath = './images';
 const outputImagesPath = './output/images';
 const outputMetadataPath = './output/metadata';
 
-const resolutionCoefficient = 4;
+const resolutionCoefficient = 1;
 const canvasSize = 1000 * resolutionCoefficient;
 const finalSize = 1024 * resolutionCoefficient;
 const signSize = finalSize - canvasSize;
@@ -114,7 +116,7 @@ async function loadImagesFromCategory(category) {
 }
 
 function addStrokeEffects(ctx, seedRand) {
-  const lineCount = seedRand() > 0.3 ? 0 : Math.floor(seedRand() * 10); // Количество линий
+  const lineCount = seedRand() > 0.45 ? 0 : Math.floor(seedRand() * 12); // Количество линий
 
   const colors =
     seedRand() > 0.3
@@ -179,7 +181,102 @@ function addStrokeEffects(ctx, seedRand) {
   return { lineCount };
 }
 
-function prepareImageTransformation(ctx, image, seedRand, centerX, centerY) {
+function generateHarmonicParams(baseHue, baseSat, baseLight, seedRand) {
+  return {
+    schemeType: Math.floor(seedRand() * 5),
+    hueVariance: 10 + seedRand() * 50,
+    satVariance: 5 + seedRand() * 20,
+    lightVariance: 5 + seedRand() * 15,
+    baseHue,
+    baseSat,
+    baseLight,
+    patternDensity: Math.floor(seedRand() * 4),
+    dynamicAngles: seedRand() > 0.5,
+    accentChance: seedRand() * 0.4,
+  };
+}
+
+function getDynamicHarmonicHues(baseHue, params, seedRand) {
+  const hues = new Set([baseHue]);
+  const angleVariations = params.dynamicAngles
+    ? Math.max(30, params.hueVariance * seedRand())
+    : params.hueVariance;
+
+  const generateVariation = (base, variance) => {
+    return (base + (seedRand() * variance * 2 - variance) + 360) % 360;
+  };
+
+  switch (params.schemeType % 5) {
+    case 0: // Dynamic Analogous
+      for (let i = 0; i < 3 + params.patternDensity; i++) {
+        hues.add(generateVariation(baseHue, angleVariations / (i + 1)));
+      }
+      break;
+
+    case 1: // Fractal Complementary
+      const mainComp = (baseHue + 180) % 360;
+      hues.add(mainComp);
+      for (let i = 0; i < params.patternDensity; i++) {
+        hues.add(generateVariation(mainComp, angleVariations));
+      }
+      break;
+
+    case 2: // Modular Triadic
+      const triadStep = 120 + (params.dynamicAngles ? seedRand() * 60 - 30 : 0);
+      for (let i = 1; i <= 3; i++) {
+        hues.add((baseHue + triadStep * i) % 360);
+      }
+      break;
+
+    case 3: // Organic Spread
+      const spreadCount = 4 + Math.floor(seedRand() * 3);
+      for (let i = 0; i < spreadCount; i++) {
+        const angle = (360 / spreadCount) * i + seedRand() * angleVariations;
+        hues.add((baseHue + angle) % 360);
+      }
+      break;
+
+    case 4: // Chromatic Vortex
+      const vortexSteps = 5 + params.patternDensity;
+      for (let i = 0; i < vortexSteps; i++) {
+        const step = (i / (vortexSteps - 1)) * angleVariations * 2;
+        hues.add((baseHue + step - angleVariations) % 360);
+      }
+      break;
+  }
+
+  // Добавляем акцентные цвета
+  if (seedRand() < params.accentChance) {
+    const accentHue = (baseHue + 180 + seedRand() * 60 - 30) % 360;
+    hues.add(accentHue);
+    hues.add(generateVariation(accentHue, params.hueVariance / 2));
+  }
+
+  // Добавляем случайные вариации
+  Array.from({ length: params.patternDensity }).forEach(() => {
+    hues.add(generateVariation(baseHue, params.hueVariance * 2));
+  });
+
+  return Array.from(hues).map((h) => ({
+    hue: h,
+    saturation: clamp(
+      params.baseSat +
+        (seedRand() * params.satVariance * 2 - params.satVariance),
+      0,
+      100
+    ),
+    lightness: params.baseLight,
+  }));
+}
+
+function prepareImageTransformation(
+  ctx,
+  image,
+  seedRand,
+  centerX,
+  centerY,
+  options
+) {
   // Вычисляем основные параметры
   const size = imageMinSize + seedRand() * imageMaxSize;
   const rotation = seedRand() * 360; // Поворот от 0 до 360 градусов
@@ -226,7 +323,7 @@ function prepareImageTransformation(ctx, image, seedRand, centerX, centerY) {
       ctx.translate(-(finalX + newWidth / 2), -(finalY + newHeight / 2));
 
       // Применяем эффекты
-      if (seedRand() < 0.05) {
+      if (seedRand() > 0.95) {
         applyGrayscale(
           ctx,
           Math.max(effectParams.val1 * image.width, 1),
@@ -234,8 +331,36 @@ function prepareImageTransformation(ctx, image, seedRand, centerX, centerY) {
         );
       }
 
+      if (seedRand() > 0.9) {
+        applyBackgroundNoise(ctx, width, height, seedRand);
+        ctx.drawImage(image, finalX, finalY, newWidth, newHeight);
+      }
+
+      // добавление пунктирных линий
+      if (seedRand() > 0.7) {
+        options.onDashedLine();
+        const length = 5 * resolutionCoefficient;
+        ctx.save();
+        ctx.strokeStyle = 'black';
+        ctx.lineWidth = 2 * resolutionCoefficient;
+        ctx.setLineDash([length, length]);
+        ctx.strokeRect(0, 0, width, height);
+        ctx.restore();
+      }
+
       if (effect > 0.65) {
-        applyHueRotate(ctx, width, height, seedRand() * 360);
+        if (options.colorStrategy === 'harmonic') {
+          const color =
+            options.harmonicHues[
+              Math.floor(seedRand() * options.harmonicHues.length)
+            ];
+          const hueShift = color.hue;
+          const satShift = color.saturation;
+
+          applyHueRotate(ctx, width, height, hueShift, satShift);
+        } else {
+          applyHueRotate(ctx, width, height, seedRand() * 360);
+        }
       }
 
       if (effect < (size - imageMinSize) / imageMaxSize) {
@@ -255,12 +380,22 @@ async function createImage(seed, instanceNumber) {
   const canvas = createCanvas(canvasSize, canvasSize);
   const ctx = canvas.getContext('2d');
   const drawQueue = [];
+  let dashedLinesCount = 0;
 
   // Генерация случайного основного цвета
   const hue = Math.floor(seedRand() * 360);
   const saturation = Math.floor(seedRand() * 100);
   const lightness = Math.floor(seedRand() * 90);
   const baseColor = `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+
+  const colorStrategy = seedRand() > 0.3 ? 'harmonic' : 'chaotic';
+  const harmonicParams = generateHarmonicParams(
+    hue,
+    saturation,
+    lightness,
+    seedRand
+  );
+  const harmonicHues = getDynamicHarmonicHues(hue, harmonicParams, seedRand);
 
   // Создание градиента с вариациями
   const gradientType = seedRand() > 0.5 ? 'linear' : 'radial';
@@ -353,7 +488,7 @@ async function createImage(seed, instanceNumber) {
       [INSECT]: 8,
       [OTHER]: 22,
       [STRANGE]: 8,
-      [SURGERY]: 6,
+      [SURGERY]: 5,
     };
     const selectedImagesCount =
       min[category] + Math.floor(seedRand() * factor[category]);
@@ -372,7 +507,13 @@ async function createImage(seed, instanceNumber) {
             image,
             seedRand,
             centerX,
-            centerY
+            centerY,
+            {
+              colorStrategy,
+              harmonicHues,
+              harmonicParams,
+              onDashedLine: () => dashedLinesCount++,
+            }
           );
           return { element, category, fileName: randomImage.fileName };
         })
@@ -453,11 +594,17 @@ async function createImage(seed, instanceNumber) {
   await fs.ensureDir(outputImagesPath);
   await fs.writeFile(outputImagePath, buffer);
 
-  return { outputImagePath, lineCount, selectedImages };
+  return { outputImagePath, lineCount, selectedImages, dashedLinesCount };
 }
 
 // Create metadata for the image
-async function createMetadata(instanceNumber, seed, selectedImages, lineCount) {
+async function createMetadata(
+  instanceNumber,
+  seed,
+  selectedImages,
+  lineCount,
+  dashedLinesCount
+) {
   const imageEntries = Object.entries(selectedImages);
   const totalImageCount = imageEntries.reduce(
     (sum, [, count]) => sum + count,
@@ -477,6 +624,10 @@ async function createMetadata(instanceNumber, seed, selectedImages, lineCount) {
       {
         trait_type: 'Number of strokes',
         value: lineCount,
+      },
+      {
+        trait_type: 'Number of dashed lines',
+        value: dashedLinesCount,
       },
     ],
   };
@@ -507,13 +658,17 @@ async function generateImagesAndMetadata(instanceCount = 1) {
     console.log(`Generating instance #${i} with seed: ${seed}`);
 
     // Create the image
-    const { outputImagePath, lineCount, selectedImages } = await createImage(
-      seed,
-      i
-    );
+    const { outputImagePath, lineCount, selectedImages, dashedLinesCount } =
+      await createImage(seed, i);
 
     // Create the metadata
-    const metadata = await createMetadata(i, seed, selectedImages, lineCount);
+    const metadata = await createMetadata(
+      i,
+      seed,
+      selectedImages,
+      lineCount,
+      dashedLinesCount
+    );
 
     console.log(`Generated image: ${outputImagePath}`);
     // console.log(`Generated metadata: ${JSON.stringify(metadata, null, 2)}`);
