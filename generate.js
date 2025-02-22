@@ -36,7 +36,7 @@ const imageFolderPath = './images';
 const outputImagesPath = './output/images';
 const outputMetadataPath = './output/metadata';
 
-const resolutionCoefficient = 1;
+const resolutionCoefficient = 4;
 const canvasSize = 1000 * resolutionCoefficient;
 const finalSize = 1024 * resolutionCoefficient;
 const signSize = finalSize - canvasSize;
