@@ -140,7 +140,7 @@ function applyBackgroundNoise(ctx, width, height, seedRand) {
   ctx.rect(0, 0, width, height); // Ограничиваем область рисования
   ctx.clip(); // Обрезаем по границам
 
-  ctx.globalCompositeOperation = 'soft-light'; // Более мягкое смешивание
+  ctx.globalCompositeOperation = 'overlay'; // Более мягкое смешивание
   ctx.drawImage(
     noiseCanvas,
     0,

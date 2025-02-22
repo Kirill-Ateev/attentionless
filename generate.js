@@ -40,6 +40,7 @@ const resolutionCoefficient = 1;
 const canvasSize = 1000 * resolutionCoefficient;
 const finalSize = 1024 * resolutionCoefficient;
 const signSize = finalSize - canvasSize;
+const maxHarmonicColors = 6;
 
 const imageMinSize = (finalSize * 200 * resolutionCoefficient) / finalSize;
 const imageMaxSize = (finalSize * 700 * resolutionCoefficient) / finalSize;
@@ -181,89 +182,75 @@ function addStrokeEffects(ctx, seedRand) {
   return { lineCount };
 }
 
-function generateHarmonicParams(baseHue, baseSat, baseLight, seedRand) {
+function generateHarmonicParams(baseSat, baseLight, seedRand) {
   return {
     schemeType: Math.floor(seedRand() * 5),
-    hueVariance: 10 + seedRand() * 50,
-    satVariance: 5 + seedRand() * 20,
-    lightVariance: 5 + seedRand() * 15,
-    baseHue,
-    baseSat,
-    baseLight,
-    patternDensity: Math.floor(seedRand() * 4),
-    dynamicAngles: seedRand() > 0.5,
-    accentChance: seedRand() * 0.4,
+    hueVariance: 15 + seedRand() * 30, // Максимум 45°
+    satVariance: 10 + seedRand() * 10, // Максимум 20%
+    baseSat: clamp(baseSat, 30, 70), // Исключаем крайние значения
+    baseLight: clamp(baseLight, 25, 75),
+    patternDensity: Math.floor(seedRand() * 3), // 0-2
+    accentChance: seedRand() * 0.3, // Макс 30% шанс акцента
   };
 }
 
 function getDynamicHarmonicHues(baseHue, params, seedRand) {
+  const MAX_COLORS = maxHarmonicColors; // Максимум цветов в палитре
   const hues = new Set([baseHue]);
-  const angleVariations = params.dynamicAngles
-    ? Math.max(30, params.hueVariance * seedRand())
-    : params.hueVariance;
 
-  const generateVariation = (base, variance) => {
-    return (base + (seedRand() * variance * 2 - variance) + 360) % 360;
-  };
+  const maxHueVariance = 45;
+  const angleVariations = Math.min(
+    params.hueVariance * (params.dynamicAngles ? seedRand() : 1),
+    maxHueVariance
+  );
 
+  // Мягкие схемы
   switch (params.schemeType % 5) {
-    case 0: // Dynamic Analogous
-      for (let i = 0; i < 3 + params.patternDensity; i++) {
-        hues.add(generateVariation(baseHue, angleVariations / (i + 1)));
+    case 0: // Аналогичная схема
+      [1, -1, 2, -2].forEach((offset) => {
+        if (hues.size >= MAX_COLORS) return;
+        hues.add((baseHue + (offset * angleVariations) / 2) % 360);
+      });
+      break;
+
+    case 1: // Мягкая комплементарная
+      const comp = (baseHue + 180) % 360;
+      hues.add(comp);
+      [comp + 15, comp - 15].forEach((h) => hues.add(h % 360));
+      break;
+
+    case 2: // Триада с вариациями
+      const triadStep = 120 + (seedRand() * 40 - 20);
+      for (let i = 1; i <= 2; i++) {
+        const triadHue = (baseHue + triadStep * i) % 360;
+        hues.add(triadHue);
+        [triadHue + 10, triadHue - 10].forEach((h) => hues.add(h % 360));
       }
       break;
 
-    case 1: // Fractal Complementary
-      const mainComp = (baseHue + 180) % 360;
-      hues.add(mainComp);
-      for (let i = 0; i < params.patternDensity; i++) {
-        hues.add(generateVariation(mainComp, angleVariations));
+    case 3: // Монохроматическая с акцентами
+      for (let i = 0; i < 3; i++) {
+        hues.add((baseHue + seedRand() * 20 - 10) % 360);
       }
       break;
 
-    case 2: // Modular Triadic
-      const triadStep = 120 + (params.dynamicAngles ? seedRand() * 60 - 30 : 0);
-      for (let i = 1; i <= 3; i++) {
-        hues.add((baseHue + triadStep * i) % 360);
-      }
-      break;
-
-    case 3: // Organic Spread
-      const spreadCount = 4 + Math.floor(seedRand() * 3);
-      for (let i = 0; i < spreadCount; i++) {
-        const angle = (360 / spreadCount) * i + seedRand() * angleVariations;
-        hues.add((baseHue + angle) % 360);
-      }
-      break;
-
-    case 4: // Chromatic Vortex
-      const vortexSteps = 5 + params.patternDensity;
-      for (let i = 0; i < vortexSteps; i++) {
-        const step = (i / (vortexSteps - 1)) * angleVariations * 2;
-        hues.add((baseHue + step - angleVariations) % 360);
-      }
+    case 4: // Сложная гармония
+      const angles = [30, 60, 90, 120, 150, 180];
+      angles.slice(0, 3 + params.patternDensity).forEach((angle) => {
+        hues.add((baseHue + angle * (seedRand() > 0.5 ? 1 : -1)) % 360);
+      });
       break;
   }
 
-  // Добавляем акцентные цвета
-  if (seedRand() < params.accentChance) {
-    const accentHue = (baseHue + 180 + seedRand() * 60 - 30) % 360;
-    hues.add(accentHue);
-    hues.add(generateVariation(accentHue, params.hueVariance / 2));
-  }
+  // Ограничиваем максимальное количество цветов
+  const finalHues = Array.from(hues).slice(0, MAX_COLORS);
 
-  // Добавляем случайные вариации
-  Array.from({ length: params.patternDensity }).forEach(() => {
-    hues.add(generateVariation(baseHue, params.hueVariance * 2));
-  });
-
-  return Array.from(hues).map((h) => ({
+  return finalHues.map((h) => ({
     hue: h,
     saturation: clamp(
-      params.baseSat +
-        (seedRand() * params.satVariance * 2 - params.satVariance),
-      0,
-      100
+      params.baseSat + (seedRand() * 20 - 10),
+      Math.max(20, params.baseSat - 15),
+      Math.min(80, params.baseSat + 15)
     ),
     lightness: params.baseLight,
   }));
@@ -290,9 +277,9 @@ function prepareImageTransformation(
   // Cкейл картинки для 95% вариантов
   const scale = size / Math.max(image.width, image.height);
   const newWidth =
-    deformation > 0.95 ? size * seedRand() : Math.max(image.width, 1) * scale;
+    deformation > 0.99 ? size * seedRand() : Math.max(image.width, 1) * scale;
   const newHeight =
-    deformation > 0.95 ? size : Math.max(image.height, 1) * scale;
+    deformation > 0.99 ? size : Math.max(image.height, 1) * scale;
 
   const expanded = seedRand() > 0.5;
   const width = expanded
@@ -331,7 +318,7 @@ function prepareImageTransformation(
         );
       }
 
-      if (seedRand() > 0.9) {
+      if (seedRand() > 0.8) {
         applyBackgroundNoise(ctx, width, height, seedRand);
         ctx.drawImage(image, finalX, finalY, newWidth, newHeight);
       }
@@ -339,11 +326,14 @@ function prepareImageTransformation(
       // добавление пунктирных линий
       if (seedRand() > 0.7) {
         options.onDashedLine();
-        const length = 5 * resolutionCoefficient;
+        const lengthLine =
+          (5 + Math.floor(seedRand() * 30)) * resolutionCoefficient;
+        const lengthSpace =
+          (5 + Math.floor(seedRand() * 30)) * resolutionCoefficient;
         ctx.save();
         ctx.strokeStyle = 'black';
-        ctx.lineWidth = 2 * resolutionCoefficient;
-        ctx.setLineDash([length, length]);
+        ctx.lineWidth = 4 * resolutionCoefficient;
+        ctx.setLineDash([lengthLine, lengthSpace]);
         ctx.strokeRect(0, 0, width, height);
         ctx.restore();
       }
@@ -390,7 +380,6 @@ async function createImage(seed, instanceNumber) {
 
   const colorStrategy = seedRand() > 0.3 ? 'harmonic' : 'chaotic';
   const harmonicParams = generateHarmonicParams(
-    hue,
     saturation,
     lightness,
     seedRand
@@ -594,7 +583,13 @@ async function createImage(seed, instanceNumber) {
   await fs.ensureDir(outputImagesPath);
   await fs.writeFile(outputImagePath, buffer);
 
-  return { outputImagePath, lineCount, selectedImages, dashedLinesCount };
+  return {
+    outputImagePath,
+    lineCount,
+    selectedImages,
+    dashedLinesCount,
+    harmonicType: harmonicParams.schemeType,
+  };
 }
 
 // Create metadata for the image
@@ -603,7 +598,8 @@ async function createMetadata(
   seed,
   selectedImages,
   lineCount,
-  dashedLinesCount
+  dashedLinesCount,
+  harmonicType
 ) {
   const imageEntries = Object.entries(selectedImages);
   const totalImageCount = imageEntries.reduce(
@@ -617,6 +613,10 @@ async function createMetadata(
     external_url: 'ateev.art',
     seed,
     attributes: [
+      {
+        trait_type: 'Harmonic type',
+        value: harmonicType,
+      },
       {
         trait_type: 'Number of images',
         value: totalImageCount,
@@ -658,8 +658,13 @@ async function generateImagesAndMetadata(instanceCount = 1) {
     console.log(`Generating instance #${i} with seed: ${seed}`);
 
     // Create the image
-    const { outputImagePath, lineCount, selectedImages, dashedLinesCount } =
-      await createImage(seed, i);
+    const {
+      outputImagePath,
+      lineCount,
+      selectedImages,
+      dashedLinesCount,
+      harmonicType,
+    } = await createImage(seed, i);
 
     // Create the metadata
     const metadata = await createMetadata(
@@ -667,7 +672,8 @@ async function generateImagesAndMetadata(instanceCount = 1) {
       seed,
       selectedImages,
       lineCount,
-      dashedLinesCount
+      dashedLinesCount,
+      harmonicType
     );
 
     console.log(`Generated image: ${outputImagePath}`);
