@@ -1,4 +1,5 @@
 const { createCanvas } = require('canvas');
+const sharp = require('sharp');
 
 function applyGrayscale(ctx, width, height) {
   const imageData = ctx.getImageData(0, 0, width, height);

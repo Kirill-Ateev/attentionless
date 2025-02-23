@@ -9,8 +9,10 @@ const {
   capitalizeFirstLetter,
   clamp,
   applyBackgroundNoise,
+  loadImageWithSharp,
 } = require('./utils');
 const webp = require('webp-wasm');
+const sharp = require('sharp');
 
 const ANIMALS = 'animals';
 const ARCHITECTURE = 'architecture';
@@ -32,9 +34,12 @@ const categories = [
   STRANGE,
   SURGERY,
 ];
-const imageFolderPath = './images';
+const imageFolderPath = './imagesConverted';
 const outputImagesPath = './output/images';
 const outputMetadataPath = './output/metadata';
+
+// Использовать с предварительно конвертированными в webp картинками в imagesConverted
+const isUsingSharp = true;
 
 const resolutionCoefficient = 4;
 const canvasSize = 1000 * resolutionCoefficient;
@@ -58,6 +63,7 @@ const centerOffset = (canvasSize * ((finalSize - canvasSize) / 2)) / canvasSize;
 const webpConfig = {
   quality: 85,
   method: 6,
+  // lossless: 1,
   pass: 10,
   exact: 1,
   alpha_compression: 1,
@@ -69,13 +75,32 @@ const webpConfig = {
   // Остальные параметры оставляем по умолчанию
 };
 
+const webpConfigSharp = {
+  quality: 85,
+  effort: 6,
+  smartSubsample: true,
+  // nearLossless: true,
+  // lossless: 1,
+};
+
 const imageCache = new Map();
 
 async function cachedLoadImage(imagePath) {
   if (imageCache.has(imagePath)) {
     return imageCache.get(imagePath);
   }
-  const image = await loadImage(imagePath);
+  let image;
+  if (isUsingSharp) {
+    // image = await loadImageWithSharp(imagePath);
+
+    const buffer = await sharp(imagePath).toFormat('png').toBuffer();
+
+    // Загружаем буфер в canvas
+    image = await loadImage(buffer);
+  } else {
+    image = await loadImage(imagePath);
+  }
+
   imageCache.set(imagePath, image);
   return image;
 }
@@ -103,7 +128,7 @@ async function loadImagesFromCategory(category) {
   const categoryPath = path.join(imageFolderPath, category);
   const files = await fs.readdir(categoryPath);
   const images = files
-    .filter((file) => file.endsWith('.png'))
+    .filter((file) => file.endsWith('.webp') || file.endsWith('.png'))
     .map((file) => ({
       path: path.join(categoryPath, file),
       fileName: file,
@@ -326,14 +351,12 @@ function prepareImageTransformation(
       // добавление пунктирных линий
       if (seedRand() > 0.7) {
         options.onDashedLine();
-        const lengthLine =
-          (5 + Math.floor(seedRand() * 30)) * resolutionCoefficient;
-        const lengthSpace =
+        const length =
           (5 + Math.floor(seedRand() * 30)) * resolutionCoefficient;
         ctx.save();
         ctx.strokeStyle = 'black';
         ctx.lineWidth = 4 * resolutionCoefficient;
-        ctx.setLineDash([lengthLine, lengthSpace]);
+        ctx.setLineDash([length, length]);
         ctx.strokeRect(0, 0, width, height);
         ctx.restore();
       }
@@ -545,8 +568,25 @@ async function createImage(seed, instanceNumber) {
   // Читаем .webp как буфер
   const initialsBuffer = fs.readFileSync(path.join(__dirname, 'initials.webp'));
 
-  // Декодируем в RGBA-массив
-  const { data, width, height } = await webp.decode(initialsBuffer);
+  let data, width, height;
+  if (isUsingSharp) {
+    // Декодирование через sharp
+    const sharpInstance = sharp(initialsBuffer);
+    const metadata = await sharpInstance.metadata();
+    width = metadata.width;
+    height = metadata.height;
+    const rawBuffer = await sharpInstance
+      .ensureAlpha() // Добавляем альфа-канал
+      .raw()
+      .toBuffer();
+    data = new Uint8ClampedArray(rawBuffer.buffer);
+  } else {
+    // Cпособ с webp-wasm
+    const decoded = await webp.decode(initialsBuffer);
+    data = decoded.data;
+    width = decoded.width;
+    height = decoded.height;
+  }
 
   // Создаём временное изображение из данных RGBA
   const initialsCanvas = createCanvas(width, height);
@@ -567,11 +607,23 @@ async function createImage(seed, instanceNumber) {
   );
   finalCtx.restore();
 
-  // extract modified pixels from canvas
-  let finalImgData = finalCtx.getImageData(0, 0, finalSize, finalSize);
+  let buffer;
+  if (isUsingSharp) {
+    const finalImgData = finalCtx.getImageData(0, 0, finalSize, finalSize);
 
-  // compress back to WebP
-  let buffer = await webp.encode(finalImgData, webpConfig);
+    buffer = await sharp(Buffer.from(finalImgData.data.buffer), {
+      raw: {
+        width: finalSize,
+        height: finalSize,
+        channels: 4,
+      },
+    })
+      .toFormat('webp', webpConfigSharp)
+      .toBuffer();
+  } else {
+    const finalImgData = finalCtx.getImageData(0, 0, finalSize, finalSize);
+    buffer = await webp.encode(finalImgData, webpConfig);
+  }
 
   // Save the image to the output folder
   const outputImagePath = path.join(outputImagesPath, `${instanceNumber}.webp`);
@@ -652,10 +704,11 @@ async function createMetadata(
 }
 
 // Main function to generate the collage and metadata
-async function generateImagesAndMetadata(instanceCount = 1) {
-  for (let i = 1; i <= instanceCount; i++) {
+async function generateImagesAndMetadata(instanceCount = 1, from) {
+  for (let i = from || 1; i <= instanceCount; i++) {
     const seed = generateSeed();
     console.log(`Generating instance #${i} with seed: ${seed}`);
+    console.log(`Start time: ${new Date().toLocaleString()}`);
 
     // Create the image
     const {
@@ -683,6 +736,7 @@ async function generateImagesAndMetadata(instanceCount = 1) {
 
 // Run the generation process
 const instanceCount = process.argv[2] ? parseInt(process.argv[2], 10) : 1;
-generateImagesAndMetadata(instanceCount)
+const startFrom = process.argv[3] ? parseInt(process.argv[3], 10) : undefined;
+generateImagesAndMetadata(instanceCount, startFrom)
   .then(() => console.log('Generation completed!'))
   .catch((err) => console.error('Error during generation:', err));

@@ -1,9 +1,13 @@
 # Sources
 /images/*
 /images2/*
+/images3
+/images3/*
 /output/images/*
 /output/metadata/*
-/V1
+/V1/*
+/imagesConverted/*
+
 
 # Logs
 logs
