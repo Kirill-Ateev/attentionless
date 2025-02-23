@@ -334,8 +334,10 @@ function prepareImageTransformation(
       if (seedRand() > 0.95) {
         applyGrayscale(
           ctx,
-          Math.max(effectParams.val1 * image.width, 1),
-          Math.max(effectParams.val2 * image.height, 1)
+          finalX,
+          finalY,
+          effectParams.val1 * newWidth,
+          effectParams.val2 * newHeight
         );
       }
 

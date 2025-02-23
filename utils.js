@@ -1,24 +1,18 @@
 const { createCanvas } = require('canvas');
 const sharp = require('sharp');
 
-function applyGrayscale(ctx, width, height) {
-  const imageData = ctx.getImageData(0, 0, width, height);
+function applyGrayscale(ctx, x, y, width, height) {
+  // Получаем данные только для целевой области
+  const imageData = ctx.getImageData(x, y, width, height);
   const data = imageData.data;
 
   for (let i = 0; i < data.length; i += 4) {
-    // Получаем исходные значения каналов
-    const r = data[i];
-    const g = data[i + 1];
-    const b = data[i + 2];
-
-    // Вычисляем значение серого (можно использовать разные коэффициенты)
-    const gray = 0.3 * r + 0.59 * g + 0.11 * b;
-
-    // Устанавливаем одинаковые значения для каналов R, G и B
+    const gray = 0.3 * data[i] + 0.59 * data[i + 1] + 0.11 * data[i + 2];
     data[i] = data[i + 1] = data[i + 2] = gray;
   }
 
-  ctx.putImageData(imageData, 0, 0);
+  // Возвращаем изменения только в целевую область
+  ctx.putImageData(imageData, x, y);
 }
 
 // Преобразование RGB -> HSL
