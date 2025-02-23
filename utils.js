@@ -110,50 +110,57 @@ function applyHueRotate(ctx, width, height, degrees, satDelta = 0) {
 }
 
 function applyBackgroundNoise(ctx, width, height, seedRand) {
-  const intensity = 0.3 + seedRand() * 0.7; // Увеличили интенсивность
-  const alpha = 0.15 + seedRand() * 0.25; // Увеличили прозрачность
-  const grainSize = 1 + Math.floor(seedRand() * 3); // Добавили вариативность размера зерен
-
-  const noiseCanvas = createCanvas(width * grainSize, height * grainSize);
+  const intensity = 0.4 + seedRand() * 0.7;
+  const alpha = 0.1 + seedRand() * 0.3;
+  const noiseCanvas = createCanvas(width, height);
   const noiseCtx = noiseCanvas.getContext('2d');
-  const imageData = noiseCtx.createImageData(
-    noiseCanvas.width,
-    noiseCanvas.height
-  );
+  const imageData = noiseCtx.createImageData(width, height);
 
-  // Генерация высококонтрастного шума
+  // Градиентный шум
   for (let i = 0; i < imageData.data.length; i += 4) {
-    const rand = seedRand();
-    const value = rand > 0.5 ? 255 : 0; // Бинарный шум для контраста
-    const pixelAlpha = rand < intensity ? alpha * 255 : 0;
-
+    const value = Math.floor(seedRand() * 55 + 200); // Светлые оттенки 200-255
     imageData.data[i] = value;
     imageData.data[i + 1] = value;
     imageData.data[i + 2] = value;
-    imageData.data[i + 3] = pixelAlpha;
+    imageData.data[i + 3] = seedRand() < intensity ? alpha * 255 : 0;
   }
 
   noiseCtx.putImageData(imageData, 0, 0);
 
-  // Масштабирование и смешивание
+  // Рисуем без масштабирования
   ctx.save();
-  ctx.beginPath();
-  ctx.rect(0, 0, width, height); // Ограничиваем область рисования
-  ctx.clip(); // Обрезаем по границам
-
-  ctx.globalCompositeOperation = 'overlay'; // Более мягкое смешивание
-  ctx.drawImage(
-    noiseCanvas,
-    0,
-    0,
-    noiseCanvas.width,
-    noiseCanvas.height,
-    0,
-    0,
-    width,
-    height // Точное соответствие размерам
-  );
+  ctx.globalCompositeOperation = 'overlay';
+  ctx.drawImage(noiseCanvas, 0, 0);
   ctx.restore();
+}
+
+async function loadImageWithSharp(imagePath) {
+  try {
+    const sharpInstance = sharp(imagePath);
+    const metadata = await sharpInstance.metadata();
+    const width = metadata.width;
+    const height = metadata.height;
+    const rawBuffer = await sharpInstance
+      .ensureAlpha() // Добавляем альфа-канал
+      .raw()
+      .toBuffer();
+    data = new Uint8ClampedArray(rawBuffer.buffer);
+
+    // Создаём временное изображение из данных RGBA
+    const initialCanvas = createCanvas(width, height);
+    const initialCtx = initialCanvas.getContext('2d');
+    const imageData = initialCtx.createImageData(width, height);
+    imageData.data.set(data);
+    initialCtx.putImageData(imageData, 0, 0);
+
+    return initialCanvas;
+  } catch (err) {
+    console.error(`[loadImageWithSharp] Critical error with ${imagePath}:`, {
+      message: err.message,
+      stack: err.stack,
+    });
+    throw new Error(`Failed to process image: ${imagePath}`);
+  }
 }
 
 function shuffle(array, randomNumber) {
@@ -203,6 +210,7 @@ module.exports = {
   applyGrayscale,
   applyHueRotate,
   applyBackgroundNoise,
+  loadImageWithSharp,
   shuffle,
   cubicBezier,
   clamp,

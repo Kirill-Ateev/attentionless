@@ -76,7 +76,7 @@ const webpConfig = {
 };
 
 const webpConfigSharp = {
-  quality: 85,
+  quality: 90,
   effort: 6,
   smartSubsample: true,
   // nearLossless: true,
@@ -91,12 +91,8 @@ async function cachedLoadImage(imagePath) {
   }
   let image;
   if (isUsingSharp) {
-    // image = await loadImageWithSharp(imagePath);
-
-    const buffer = await sharp(imagePath).toFormat('png').toBuffer();
-
-    // Загружаем буфер в canvas
-    image = await loadImage(buffer);
+    // Загружаем буфер webp в canvas
+    image = await loadImageWithSharp(imagePath);
   } else {
     image = await loadImage(imagePath);
   }
