@@ -40,6 +40,7 @@ const outputMetadataPath = './output/metadata';
 
 // Использовать с предварительно конвертированными в webp картинками в imagesConverted
 const isUsingSharp = true;
+const isUsingCachedImages = false;
 
 const resolutionCoefficient = 4;
 const canvasSize = 1000 * resolutionCoefficient;
@@ -86,6 +87,17 @@ const webpConfigSharp = {
 const imageCache = new Map();
 
 async function cachedLoadImage(imagePath) {
+  if (!isUsingCachedImages) {
+    let image;
+    if (isUsingSharp) {
+      // Загружаем буфер webp в canvas
+      image = await loadImageWithSharp(imagePath);
+    } else {
+      image = await loadImage(imagePath);
+    }
+    return image;
+  }
+
   if (imageCache.has(imagePath)) {
     return imageCache.get(imagePath);
   }
@@ -295,7 +307,7 @@ function prepareImageTransformation(
   const originWidth = seedRand() > 0.5 ? image.width : ctx.canvas.width;
   const originHeight = seedRand() > 0.5 ? image.height : ctx.canvas.height;
 
-  // Cкейл картинки для 95% вариантов
+  // Cкейл картинки для 99% вариантов
   const scale = size / Math.max(image.width, image.height);
   const newWidth =
     deformation > 0.99 ? size * seedRand() : Math.max(image.width, 1) * scale;
@@ -388,7 +400,7 @@ function prepareImageTransformation(
 // Create collage image
 async function createImage(seed, instanceNumber) {
   const seedRand = seededRandom(seed);
-  const canvas = createCanvas(canvasSize, canvasSize);
+  let canvas = createCanvas(canvasSize, canvasSize);
   const ctx = canvas.getContext('2d');
   const drawQueue = [];
   let dashedLinesCount = 0;
@@ -540,7 +552,7 @@ async function createImage(seed, instanceNumber) {
       // Формируем ключ для выбранного изображения
       const key = `${capitalizeFirstLetter(category)} image №${fileName.slice(
         0,
-        -4
+        isUsingSharp ? -5 : -4
       )}`;
       // Увеличиваем счетчик для каждого вхождения (если изображение выбрано более одного раза, оно учитывается столько раз)
       selectedImages[key] = (selectedImages[key] || 0) + 1;
@@ -552,8 +564,8 @@ async function createImage(seed, instanceNumber) {
   drawQueue.forEach((item) => item.draw());
 
   // Create a larger canvas with 1024x1024 for white frame
-  const finalCanvas = createCanvas(finalSize, finalSize);
-  const finalCtx = finalCanvas.getContext('2d');
+  let finalCanvas = createCanvas(finalSize, finalSize);
+  let finalCtx = finalCanvas.getContext('2d');
   finalCtx.fillStyle = '#FFFFFF';
   finalCtx.fillRect(0, 0, finalSize, finalSize);
 
@@ -632,6 +644,12 @@ async function createImage(seed, instanceNumber) {
 
   await fs.ensureDir(outputImagesPath);
   await fs.writeFile(outputImagePath, buffer);
+
+  // принудительное очищение кэша
+  // buffer = null;
+  // finalCanvas = null;
+  // canvas = null;
+  // imageCache.clear(); // Добавляем принудительную очистку кеша
 
   return {
     outputImagePath,

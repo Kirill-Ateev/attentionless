@@ -2,8 +2,31 @@ const { createCanvas } = require('canvas');
 const sharp = require('sharp');
 
 function applyGrayscale(ctx, x, y, width, height) {
-  // Получаем данные только для целевой области
-  const imageData = ctx.getImageData(x, y, width, height);
+  const canvasWidth = ctx.canvas.width;
+  const canvasHeight = ctx.canvas.height;
+
+  // Если запрошенная область полностью вне canvas, просто выходим
+  if (
+    x >= canvasWidth ||
+    y >= canvasHeight ||
+    x + width <= 0 ||
+    y + height <= 0
+  ) {
+    return;
+  }
+
+  // Обрезаем координаты, чтобы они не выходили за пределы canvas
+  const clampedX = Math.max(0, x);
+  const clampedY = Math.max(0, y);
+  const clampedWidth = Math.min(width, canvasWidth - clampedX);
+  const clampedHeight = Math.min(height, canvasHeight - clampedY);
+
+  const imageData = ctx.getImageData(
+    clampedX,
+    clampedY,
+    clampedWidth,
+    clampedHeight
+  );
   const data = imageData.data;
 
   for (let i = 0; i < data.length; i += 4) {
@@ -11,8 +34,7 @@ function applyGrayscale(ctx, x, y, width, height) {
     data[i] = data[i + 1] = data[i + 2] = gray;
   }
 
-  // Возвращаем изменения только в целевую область
-  ctx.putImageData(imageData, x, y);
+  ctx.putImageData(imageData, clampedX, clampedY);
 }
 
 // Преобразование RGB -> HSL
@@ -138,13 +160,12 @@ async function loadImageWithSharp(imagePath) {
       .ensureAlpha() // Добавляем альфа-канал
       .raw()
       .toBuffer();
-    data = new Uint8ClampedArray(rawBuffer.buffer);
 
     // Создаём временное изображение из данных RGBA
     const initialCanvas = createCanvas(width, height);
     const initialCtx = initialCanvas.getContext('2d');
     const imageData = initialCtx.createImageData(width, height);
-    imageData.data.set(data);
+    imageData.data.set(new Uint8ClampedArray(rawBuffer));
     initialCtx.putImageData(imageData, 0, 0);
 
     return initialCanvas;
@@ -154,23 +175,6 @@ async function loadImageWithSharp(imagePath) {
       stack: err.stack,
     });
     throw new Error(`Failed to process image: ${imagePath}`);
-  }
-}
-
-function shuffle(array, randomNumber) {
-  let currentIndex = array.length;
-
-  // While there remain elements to shuffle...
-  while (currentIndex != 0) {
-    // Pick a remaining element...
-    let randomIndex = Math.floor(randomNumber * currentIndex);
-    currentIndex--;
-
-    // And swap it with the current element.
-    [array[currentIndex], array[randomIndex]] = [
-      array[randomIndex],
-      array[currentIndex],
-    ];
   }
 }
 
