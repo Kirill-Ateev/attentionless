@@ -676,7 +676,7 @@ async function createMetadata(
         value: lineCount,
       },
       {
-        trait_type: 'Number of dashed lines',
+        trait_type: 'Number of dashed frames',
         value: dashedLinesCount,
       },
     ],
