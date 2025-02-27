@@ -678,7 +678,7 @@ async function createMetadata(
     name: `Attentionless №${instanceNumber}`,
     description: 'Attentionless collection by Kirill Ateev',
     image: `${instanceNumber}.webp`,
-    external_url: 'ateev.art',
+    external_url: 'https://ateev.art',
     seed,
     attributes: [
       {

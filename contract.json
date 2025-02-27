@@ -1,0 +1,10 @@
+{
+  "name": "Attentionless",
+  "symbol": "ATTENTIONLESS",
+  "description": "Life is an i",
+  "artist": "Kirill Ateev",
+  "external_url": "https://ateev.art",
+  "image": "ipfs://bafybeih3p5sbzqqlrg5zi2n3xp6xiv7hdudlstwsegb4pda442azsmcgzu/727.webp",
+  "seller_fee_basis_points": 0,
+  "fee_recipient": "0x2DbF1B40f0593e338E56A2C2E6bEaDE46Ac83E8B"
+}
