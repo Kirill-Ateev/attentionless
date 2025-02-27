@@ -21,6 +21,9 @@ function applyGrayscale(ctx, x, y, width, height) {
   const clampedWidth = Math.min(width, canvasWidth - clampedX);
   const clampedHeight = Math.min(height, canvasHeight - clampedY);
 
+  // проверка достаточно ли пространства
+  if (clampedWidth < 1 || clampedHeight < 1) return;
+
   const imageData = ctx.getImageData(
     clampedX,
     clampedY,
