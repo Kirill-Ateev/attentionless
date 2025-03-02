@@ -1,10 +1,17 @@
+# Application for generating the "Attentionless by Kirill Ateev" Ethereum NFT collection
+
+[https://rarible.com/attentionless](https://rarible.com/attentionless)
+
+Attentionless is a collection of generative collages of CC0 images in the style of abstractionism and was released on March 1, 2025 on the Ethereum network in NFT format with data in IPFS
+
+The original components are presented in the repository.
+
+# More information
+
+https://ateev.art/en
+
+https://t.me/ateev_kirill
+
+# Usage
+
 node generate.js 5 // for 5 examples
-
-with expanded cache buffer
-node --max-old-space-size=8192 --expose-gc generate.js 5
-
-Для сбора source картинок CC0:
-https://colab.research.google.com/drive/1TfZOGir4CDAxOFINps3S_pmZL5ldVl5r
-
-Описание:
-https://gist.github.com/Kirill-Ateev/a4935213518baee8c9317c8ea4608c18
